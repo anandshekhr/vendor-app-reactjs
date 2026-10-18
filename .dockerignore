@@ -1,0 +1,9 @@
+node_modules
+dist
+legacy-react-native
+test-results
+playwright-report
+.env
+.env.*
+!.env.example
+.git

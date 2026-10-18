@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --canvas: 246 247 249;
+    --surface: 255 255 255;
+    --line: 228 231 236;
+    --ink: 16 24 40;
+    --ink-muted: 71 84 103;
+    --ink-subtle: 132 144 163;
+    color-scheme: light;
+  }
+  .dark {
+    --canvas: 12 17 29;
+    --surface: 22 29 43;
+    --line: 45 55 72;
+    --ink: 240 242 246;
+    --ink-muted: 178 188 204;
+    --ink-subtle: 128 140 160;
+    color-scheme: dark;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-canvas text-ink antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500 ring-offset-1 ring-offset-surface;
+  }
+}
+
+@layer components {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 80mm;
+  }
+}
