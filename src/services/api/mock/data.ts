@@ -1,5 +1,7 @@
 /* Development-only fixture data for the mock API. Shapes follow the Django serializers. */
 import type {
+  ApplicantApplication,
+  StarterProductSelection,
   BankAccount,
   BookingListItem,
   Category,
@@ -338,6 +340,21 @@ export function createMockDb() {
       { id: 20, name: 'Salon', parent_category: null, category_type: 'service', children: [] },
       { id: 21, name: 'Home repair', parent_category: null, category_type: 'service', children: [] },
     ] as OnboardingCategory[],
+    applications: [] as ApplicantApplication[],
+
+    /** Mirrors StarterProductService in api-services: ≥ 5 distinct catalogue products, price ≤ MRP. */
+    starterSelections(items: { master_product_id: number; price?: string; stock?: number }[]): { error: [number, unknown] } | { selections: StarterProductSelection[] } {
+      if (!Array.isArray(items) || items.length < 5) return { error: [400, { items: ['Select at least 5 products to start selling.'] }] };
+      if (new Set(items.map((i) => i.master_product_id)).size !== items.length) return { error: [400, { items: ['A product is selected more than once.'] }] };
+      const out: StarterProductSelection[] = [];
+      for (const i of items) {
+        const m = masterCatalog.find((x) => x.id === i.master_product_id);
+        if (!m) return { error: [400, { items: [`These products are not available in the catalogue: ${i.master_product_id}.`] }] };
+        if (i.price != null && m.max_retail_price != null && Number(i.price) > Number(m.max_retail_price)) return { error: [400, { items: [`${m.name}: selling price ${i.price} is above MRP ${m.max_retail_price}.`] }] };
+        out.push({ master_product_id: m.id, name: m.name, image: m.image, brand_name: m.brand_name, unit_name: m.unit_name, max_retail_price: m.max_retail_price, catalogue_price: m.selling_price, price: i.price ?? null, opening_stock: Number(i.stock ?? 0) });
+      }
+      return { selections: out };
+    },
 
     pendingWithdrawals: () => withdrawals.filter((w) => w.status === 'pending' || w.status === 'processing').reduce((s, w) => s + Number(w.amount), 0),
     catalogName: (id: string) => catalog.find((c) => c.id === id)?.name ?? 'Service',

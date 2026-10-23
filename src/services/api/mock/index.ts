@@ -7,6 +7,7 @@
  */
 import { AxiosError, AxiosHeaders, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 import { installMockAdapter } from '../client';
+import type { ApplicantApplication } from '@/types/api';
 import { createMockDb, type MockDb } from './data';
 
 type Handler = (ctx: { params: Record<string, string>; query: URLSearchParams; body: any; db: MockDb }) => [number, unknown];
@@ -251,10 +252,58 @@ on('POST', '/api/v2/chat/conversations/:key/close/', ({ db, params }) => {
 on('GET', '/api/vendor-onboarding/categories/', ({ db }) => [200, db.onboardingCategories]);
 on('POST', '/api/vendor-onboarding/send-otp/', () => [200, { detail: 'OTP has been sent to your phone.' }]);
 on('POST', '/api/vendor-onboarding/verify-otp/', ({ body }) => (body.otp === '1234' ? [200, { verified: true }] : [400, { detail: 'Invalid or expired OTP.', verified: false }]));
-on('POST', '/api/vendor-onboarding/applications/', ({ body }) => [
-  201,
-  { id: 1, vendor_name: (body as FormData).get('vendor_name'), business_name: (body as FormData).get('business_name'), phone: (body as FormData).get('phone'), status: 'submitted', created_at: new Date().toISOString() },
-]);
+on('POST', '/api/vendor-onboarding/applications/', ({ db, body }) => {
+  const fd = body as FormData;
+  const categoryIds = fd.getAll('category_ids').map(Number);
+  const product = categoryIds.some((id) => id === 10 || id === 11);
+  const id = db.applications.length + 1;
+  const app: ApplicantApplication = {
+    id,
+    application_number: `VA-MOCK-${String(id).padStart(4, '0')}`,
+    vendor_type: product ? 'product' : 'service',
+    vendor_name: String(fd.get('vendor_name')),
+    business_name: String(fd.get('business_name')),
+    phone: String(fd.get('phone')),
+    status: 'under_review',
+    status_display: 'Under Review',
+    admin_review_note: '',
+    requested_documents_note: '',
+    product_selections: [],
+    min_starter_products: 5,
+    requires_starter_products: product,
+    can_edit_products: product,
+    can_sign_in: false,
+    selection_token: product ? `mock-token-${id}` : null,
+    created_at: new Date().toISOString(),
+    approved_at: null,
+    activated_at: null,
+    rejected_at: null,
+  };
+  db.applications.push(app);
+  return [201, app];
+});
+// The mock catalogue isn't filed under the onboarding categories, so the category filter is ignored here.
+on('GET', '/api/vendor-onboarding/master-products/', ({ db, query }) => {
+  const q = (query.get('search') ?? '').toLowerCase();
+  const rows = db.masterCatalog
+    .filter((m) => !q || [m.name, m.brand_name ?? ''].some((v) => v.toLowerCase().includes(q)))
+    .map(({ id, name, image, brand_name, category_name, unit_name, selling_price, max_retail_price }) => ({ id, name, image, brand_name, category: null, category_name, unit_name, selling_price, max_retail_price }));
+  return [200, paginate(rows, query, 24)];
+});
+on('POST', '/api/vendor-onboarding/applications/status/', ({ db, body }) => {
+  if (body?.otp !== '1234') return [400, { detail: 'Invalid or expired OTP.' }];
+  const digits = String(body.phone).replace(/\D/g, '').slice(-10);
+  return [200, { applications: db.applications.filter((a) => a.phone.replace(/\D/g, '').slice(-10) === digits) }];
+});
+on('PUT', '/api/vendor-onboarding/applications/:id/products/', ({ db, params, body }) => {
+  const app = db.applications.find((a) => a.id === Number(params.id));
+  if (!app || body?.token !== `mock-token-${params.id}`) return [403, { detail: 'This link has expired. Check your application status again to continue.' }];
+  if (!app.can_edit_products) return [409, { detail: 'This application has already been reviewed; starter products can no longer be changed.' }];
+  const result = db.starterSelections(body.items);
+  if ('error' in result) return result.error;
+  app.product_selections = result.selections;
+  return [200, app];
+});
 
 function fakeJwt() {
   const payload = btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600, user_id: 1 })).replace(/=+$/, '');

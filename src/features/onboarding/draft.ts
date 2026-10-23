@@ -2,6 +2,8 @@ import { normalizeIndianMobile } from '@/utils/phone';
 
 export type StepId = 'phone' | 'business' | 'categories' | 'address' | 'service' | 'documents' | 'review';
 
+export const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+
 export type FileKey = 'business_license_files' | 'id_proof_files' | 'bank_detail_files' | 'supporting_files';
 
 export interface OnboardingDraft {
@@ -20,6 +22,12 @@ export interface OnboardingDraft {
   latitude: string;
   longitude: string;
   gstTaxId: string;
+  /** Payout account; optional at registration (it can be added from Bank accounts after approval). */
+  bankHolder: string;
+  bankName: string;
+  accountNumber: string;
+  ifsc: string;
+  upiId: string;
   shopHours: { day_of_week: number; start_time: string; end_time: string; open: boolean }[];
   employees: { client_id: string; full_name: string; phone: string; role: string; specialties: string }[];
   files: Record<FileKey, File[]>;
@@ -58,6 +66,13 @@ export function validateStep(step: StepId, d: OnboardingDraft): Record<string, s
   }
   if (step === 'documents' || all) {
     if (d.gstTaxId && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(d.gstTaxId)) e.gstTaxId = 'GSTIN must be 15 characters, e.g. 22AAAAA0000A1Z5.';
+    const account = d.accountNumber.replace(/\s/g, '');
+    if (account || d.ifsc) {
+      if (!/^\d{6,20}$/.test(account)) e.accountNumber = 'Enter a valid account number (digits only).';
+      if (!IFSC_PATTERN.test(d.ifsc.trim().toUpperCase())) e.ifsc = 'IFSC is 11 characters, e.g. HDFC0001234.';
+      if (!d.bankHolder.trim()) e.bankHolder = 'Enter the account holder name.';
+    }
+    if (d.upiId && !/^[\w.-]{2,}@[a-zA-Z]{2,}$/.test(d.upiId.trim())) e.upiId = 'Enter a UPI ID like name@bank.';
     for (const [key, files] of Object.entries(d.files)) {
       if (files.some((f) => f.size > MAX_FILE_BYTES)) e[key] = 'Each file must be 10 MB or smaller.';
     }
@@ -71,6 +86,7 @@ export function buildApplicationFormData(d: OnboardingDraft): FormData {
   fd.append('vendor_name', d.vendorName.trim());
   fd.append('email', d.email.trim());
   fd.append('phone', normalizeIndianMobile(d.phone));
+  // Older servers read this flag; updated ones ignore it and check their own OTP records.
   fd.append('phone_verified', String(d.phoneVerified));
   fd.append('business_name', d.businessName.trim());
   fd.append('gst_tax_id', d.gstTaxId.trim());
@@ -83,6 +99,14 @@ export function buildApplicationFormData(d: OnboardingDraft): FormData {
     fd.append('longitude', d.longitude);
   }
   d.categoryIds.forEach((id) => fd.append('category_ids', String(id)));
+  const account = d.accountNumber.replace(/\s/g, '');
+  if (account) {
+    fd.append('bank_account_holder_name', d.bankHolder.trim());
+    fd.append('bank_name', d.bankName.trim());
+    fd.append('account_number', account);
+    fd.append('ifsc_code', d.ifsc.trim().toUpperCase());
+  }
+  if (d.upiId.trim()) fd.append('upi_id', d.upiId.trim());
   if (d.businessType === 'service') {
     fd.append(
       'shop_hours_payload',

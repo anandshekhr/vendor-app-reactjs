@@ -141,3 +141,80 @@ test('shop QR: create and open the print layout', async ({ page }) => {
   await page.getByRole('radio', { name: /4 cards/ }).click();
   await expect(page.getByAltText(/QR code .* for Sharma General Store/)).toBeVisible();
 });
+
+test('self-registration: apply, pick 5 starter products, then check status', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/login');
+  await page.getByRole('link', { name: 'Register your business' }).click();
+
+  await page.getByLabel('Mobile number').fill('9812345678');
+  await page.getByRole('button', { name: 'Send OTP' }).click();
+  await page.getByLabel('OTP').fill('1234');
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page.getByText('Phone verified')).toBeVisible();
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  await page.getByLabel('Your name').fill('Ravi Kumar');
+  await page.getByLabel('Email').fill('ravi@example.com');
+  await page.getByLabel('Business / shop name').fill('Ravi Stores');
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  await page.getByRole('checkbox', { name: 'Grocery' }).check();
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  await page.getByLabel('Shop address').fill('12 MG Road, Indiranagar');
+  await page.getByLabel('City').fill('Bengaluru');
+  await page.getByLabel('State').fill('Karnataka');
+  await page.getByLabel('PIN code').fill('560001');
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  await page.getByLabel('Account number').fill('12AB');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByText('IFSC is 11 characters')).toBeVisible();
+  await page.getByLabel('Account number').fill('123456789012');
+  await page.getByLabel('IFSC').fill('hdfc0001234');
+  await page.getByLabel('Account holder name').fill('Ravi Kumar');
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  await expect(page.getByText('•••• 9012 · HDFC0001234')).toBeVisible();
+  await page.getByRole('checkbox', { name: /I confirm/ }).check();
+  await page.getByRole('button', { name: 'Submit application' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Choose at least 5 products to start selling' })).toBeVisible();
+  const catalogue = page.getByRole('list', { name: 'Catalogue products' });
+  for (const name of ['Tata Salt 1kg', 'Aashirvaad Atta 5kg', 'Fortune Sunflower Oil 1L', 'Amul Taaza Milk 500ml']) {
+    await catalogue.getByRole('checkbox', { name: `Select ${name}` }).check();
+  }
+  await page.getByRole('button', { name: 'Save and finish' }).click();
+  await expect(page.getByText('Select 1 more product (at least 5).')).toBeVisible();
+
+  await catalogue.getByRole('checkbox', { name: 'Select Maggi Noodles 280g' }).check();
+  await page.getByLabel('Selling price for Maggi Noodles 280g').fill('65');
+  await page.getByRole('button', { name: 'Save and finish' }).click();
+  await expect(page.getByText(/need a valid price|needs a valid price/)).toBeVisible();
+  await page.getByLabel('Selling price for Maggi Noodles 280g').fill('58');
+  await page.getByLabel('Opening stock for Maggi Noodles 280g').fill('24');
+  await page.getByRole('button', { name: 'Save and finish' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Application submitted' })).toBeVisible();
+  await expect(page.getByText('5 starter products saved')).toBeVisible();
+  await expect(page.getByText('You will start selling once the team approves your application.')).toBeVisible();
+
+  // In-app navigation keeps the in-memory mock's saved application.
+  await page.getByRole('button', { name: 'Check application status' }).click();
+  await page.getByLabel('Mobile number').fill('9812345678');
+  await page.getByRole('button', { name: 'Send OTP' }).click();
+  await page.getByLabel('OTP').fill('1234');
+  await page.getByRole('button', { name: 'Check status' }).click();
+  await expect(page.getByText('Ravi Stores')).toBeVisible();
+  await expect(page.getByText(/start selling once the TheNearByShop team approves/)).toBeVisible();
+  await expect(page.getByText('Starter products (5)')).toBeVisible();
+  await expect(page.getByText('₹58.00 · stock 24')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Change products' }).click();
+  await page.getByRole('list', { name: 'Catalogue products' }).getByRole('checkbox', { name: 'Select Parle-G 800g' }).check();
+  await page.getByRole('button', { name: 'Save starter products' }).click();
+  await expect(page.getByText('Starter products (6)')).toBeVisible();
+  expect(errors).toEqual([]);
+});

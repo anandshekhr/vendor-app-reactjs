@@ -1,19 +1,27 @@
-import type { MasterCatalogItem, ProductListItem } from '@/types/api';
+import type { Decimal, MasterCatalogItem, ProductListItem } from '@/types/api';
 
-export interface CatalogDraft {
-  item: MasterCatalogItem;
+/** The fields price/stock validation needs; satisfied by both the shop and the public (onboarding) catalogue. */
+export interface PricedCatalogItem {
+  id: number;
+  name: string;
+  selling_price: Decimal | null;
+  max_retail_price: Decimal | null;
+}
+
+export interface CatalogDraft<T extends PricedCatalogItem = MasterCatalogItem> {
+  item: T;
   /** Vendor's selling price (₹). Defaults to the catalogue price. */
   price: string;
   /** Opening stock. */
   stock: string;
 }
 
-export function draftFor(item: MasterCatalogItem): CatalogDraft {
+export function draftFor<T extends PricedCatalogItem>(item: T): CatalogDraft<T> {
   return { item, price: item.selling_price != null ? Number(item.selling_price).toFixed(2) : '', stock: '0' };
 }
 
 /** Mirrors the server rules (price ≥ 0 and not above MRP; whole-number stock). */
-export function validateDraft(d: CatalogDraft): { price?: string; stock?: string } {
+export function validateDraft(d: CatalogDraft<PricedCatalogItem>): { price?: string; stock?: string } {
   const errors: { price?: string; stock?: string } = {};
   if (!/^\d+(\.\d{1,2})?$/.test(d.price.trim())) errors.price = 'Enter a price like 45 or 45.50';
   else if (d.item.max_retail_price != null && Number(d.price) > Number(d.item.max_retail_price)) errors.price = `Above MRP ₹${Number(d.item.max_retail_price).toFixed(2)}`;
@@ -22,7 +30,7 @@ export function validateDraft(d: CatalogDraft): { price?: string; stock?: string
   return errors;
 }
 
-export function toBulkItems(drafts: CatalogDraft[]) {
+export function toBulkItems(drafts: CatalogDraft<PricedCatalogItem>[]) {
   return drafts.map((d) => ({ master_product_id: d.item.id, price: Number(d.price).toFixed(2), stock: Number(d.stock) }));
 }
 

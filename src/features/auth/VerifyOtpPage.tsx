@@ -49,7 +49,7 @@ export function VerifyOtpPage() {
       navigate(state?.from && state.from !== '/login' ? state.from : '/dashboard', { replace: true });
     } catch (err) {
       if (isApiError(err) && err.status === 403) {
-        setMessage({ tone: 'error', text: 'This number is not registered as a vendor yet.', notVendor: true });
+        setMessage({ tone: 'error', text: 'This number has no active vendor account yet. New applications can sign in once approved.', notVendor: true });
       } else {
         setMessage({ tone: 'error', text: isApiError(err) ? err.message : 'Verification failed.' });
       }
@@ -95,7 +95,12 @@ export function VerifyOtpPage() {
                 {' '}
                 <Link to="/onboarding" className="font-medium underline">
                   Register your business
+                </Link>{' '}
+                or{' '}
+                <Link to="/onboarding/status" className="font-medium underline">
+                  check your application
                 </Link>
+                .
               </>
             )}
           </div>

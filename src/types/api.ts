@@ -661,6 +661,32 @@ export interface OnboardingCategory {
   children: OnboardingCategory[];
 }
 
+/** A product an applicant can pick as a starter product (public catalogue endpoint). */
+export interface StarterCatalogItem {
+  id: number;
+  name: string;
+  image: string | null;
+  brand_name: string | null;
+  category?: number | null;
+  category_name: string | null;
+  unit_name: string | null;
+  selling_price: Decimal | null;
+  max_retail_price: Decimal | null;
+}
+
+/** A starter product saved on an application. Listed on the shop when the application is activated. */
+export interface StarterProductSelection {
+  master_product_id: number;
+  name: string;
+  image: string | null;
+  brand_name: string | null;
+  unit_name: string | null;
+  max_retail_price: Decimal | null;
+  catalogue_price: Decimal | null;
+  price: Decimal | null;
+  opening_stock: number;
+}
+
 export interface VendorApplication {
   id: number;
   vendor_name: string;
@@ -670,6 +696,30 @@ export interface VendorApplication {
   admin_review_note?: string;
   requested_documents_note?: string;
   created_at: ISODateTime;
+  // Present on servers with the self-registration update (API_MAPPING → Required api-services version).
+  application_number?: string;
+  vendor_type?: 'product' | 'service' | 'hybrid' | '';
+  product_selections?: StarterProductSelection[];
+  min_starter_products?: number;
+  requires_starter_products?: boolean;
+  /** Short-lived token that authorises replacing the starter products. Only for product sellers before review. */
+  selection_token?: string | null;
+}
+
+/** An applicant's own application, returned by the OTP-protected status lookup. */
+export interface ApplicantApplication extends VendorApplication {
+  status_display: string;
+  can_edit_products: boolean;
+  can_sign_in: boolean;
+  approved_at: ISODateTime | null;
+  activated_at: ISODateTime | null;
+  rejected_at: ISODateTime | null;
+}
+
+export interface StarterProductInput {
+  master_product_id: number;
+  price: string;
+  stock: number;
 }
 
 // ─── Shop QR ─────────────────────────────────────────────────────────────────

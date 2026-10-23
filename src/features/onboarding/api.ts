@@ -1,5 +1,6 @@
 import { api } from '@/services/api';
-import type { OnboardingCategory, VendorApplication } from '@/types/api';
+import type { Paginated } from '@/services/api/pagination';
+import type { ApplicantApplication, OnboardingCategory, StarterCatalogItem, StarterProductInput, VendorApplication } from '@/types/api';
 
 export const onboardingApi = api.injectEndpoints({
   endpoints: (build) => ({
@@ -8,8 +9,8 @@ export const onboardingApi = api.injectEndpoints({
       transformResponse: (data: unknown) => (Array.isArray(data) ? data : ((data as { results?: OnboardingCategory[] })?.results ?? [])),
     }),
     sendOnboardingOtp: build.mutation<void, string>({
-      // NOTE: this endpoint currently echoes the OTP in its response (API_MAPPING S-1). The response body is
-      // deliberately discarded here so the code is never stored in state or rendered.
+      // Older servers echo the OTP in this response (API_MAPPING S-1). The body is deliberately discarded so the code
+      // is never stored in state or rendered.
       query: (phone) => ({ url: '/api/vendor-onboarding/send-otp/', method: 'POST', data: { phone }, skipAuth: true }),
       transformResponse: () => undefined,
     }),
@@ -19,7 +20,28 @@ export const onboardingApi = api.injectEndpoints({
     submitApplication: build.mutation<VendorApplication, FormData>({
       query: (data) => ({ url: '/api/vendor-onboarding/applications/', method: 'POST', data, skipAuth: true }),
     }),
+    listStarterCatalog: build.query<Paginated<StarterCatalogItem>, { search?: string; categories?: number[]; page?: number }>({
+      query: ({ search, categories, page }) => ({
+        url: '/api/vendor-onboarding/master-products/',
+        params: { search: search || undefined, category: categories?.length ? categories.join(',') : undefined, page, page_size: 24 },
+        skipAuth: true,
+      }),
+    }),
+    lookupApplications: build.mutation<{ applications: ApplicantApplication[] }, { phone: string; otp: string }>({
+      query: (data) => ({ url: '/api/vendor-onboarding/applications/status/', method: 'POST', data, skipAuth: true }),
+    }),
+    saveStarterProducts: build.mutation<ApplicantApplication, { id: number; token: string; items: StarterProductInput[] }>({
+      query: ({ id, ...data }) => ({ url: `/api/vendor-onboarding/applications/${id}/products/`, method: 'PUT', data, skipAuth: true }),
+    }),
   }),
 });
 
-export const { useGetOnboardingCategoriesQuery, useSendOnboardingOtpMutation, useVerifyOnboardingOtpMutation, useSubmitApplicationMutation } = onboardingApi;
+export const {
+  useGetOnboardingCategoriesQuery,
+  useSendOnboardingOtpMutation,
+  useVerifyOnboardingOtpMutation,
+  useSubmitApplicationMutation,
+  useListStarterCatalogQuery,
+  useLookupApplicationsMutation,
+  useSaveStarterProductsMutation,
+} = onboardingApi;

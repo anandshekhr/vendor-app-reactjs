@@ -67,6 +67,12 @@ export function LoginPage() {
           Register your business
         </Link>
       </p>
+      <p className="mt-2 text-center text-sm text-ink-muted">
+        Already applied?{' '}
+        <Link to="/onboarding/status" className="font-medium text-brand-700 hover:underline">
+          Check application status
+        </Link>
+      </p>
     </AuthLayout>
   );
 }

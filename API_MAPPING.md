@@ -9,7 +9,7 @@ is not listed here.
 
 Re-inspected against `api-services` `a33a7cc` (Oct 2026), which added its own POS endpoints, a rebuilt chat app
 (REST + Django Channels), and vendor-facing rider-search state. The portal additionally uses endpoints from the
-**`claude/vendor-portal-api`** branch of api-services (commits `3f3586e`, `2d57972`, 13 new tests):
+**`claude/vendor-portal-api`** branch of api-services (commits `3f3586e`, `2d57972`, `537ea54`; 32 new tests):
 
 | Change | Endpoint |
 |---|---|
@@ -17,10 +17,16 @@ Re-inspected against `api-services` `a33a7cc` (Oct 2026), which added its own PO
 | Order list returns `source` and `delivery` | `GET /vendor/dashboard/api/orders/` |
 | Master import with per-item selling price and opening stock | `POST /vendor/dashboard/api/products/bulk-add/` `{items: [{master_product_id, price?, stock?}]}` |
 | Shop QR stickers (list / mint) | `GET|POST /vendor/dashboard/api/store/qr/` |
+| Self-registration: starter products, optional bank details, `selection_token` on submit | `POST /api/vendor-onboarding/applications/` |
+| Public catalogue for starter products | `GET /api/vendor-onboarding/master-products/` |
+| Application status by phone + OTP | `POST /api/vendor-onboarding/applications/status/` |
+| Replace starter products before review | `PUT /api/vendor-onboarding/applications/<id>/products/` |
+| Approval blocked until a product seller has 5 starter products; activation lists them on the shop | admin approve / activate |
+| send-otp no longer returns the code outside `DEBUG` (S-1, first half) | `POST /api/vendor-onboarding/send-otp/` |
 
 Until that branch is deployed the portal degrades gracefully: invoices fall back to the old detail endpoint and show
-the delivery charge as "included in total", catalogue imports warn that the server ignored the price/stock, and the QR
-page explains that the endpoint is missing.
+the delivery charge as "included in total", catalogue imports warn that the server ignored the price/stock, the QR
+page explains that the endpoint is missing, and registration finishes without the starter-product step (with a notice).
 
 ## Sources inspected
 
@@ -80,11 +86,19 @@ The self-service application flow from `apps/vendor_onboarding` (reviewed by adm
 | Step | Method & path | Notes |
 |---|---|---|
 | Category tree | `GET /api/vendor-onboarding/categories/` | `[{id, name, parent_category, category_type: product|service, children: [...]}]` |
-| Send phone OTP | `POST /api/vendor-onboarding/send-otp/` `{phone}` | ⚠ The response contains the OTP (see **Security S-1**). The portal **never reads or displays** that field. |
+| Send phone OTP | `POST /api/vendor-onboarding/send-otp/` `{phone}` | Older servers return the OTP in the response (**Security S-1**). The portal **never reads or displays** it; the update only returns it under `DEBUG`. |
 | Verify phone OTP | `POST /api/vendor-onboarding/verify-otp/` `{phone, otp}` | `{verified: true}` |
-| Submit application | `POST /api/vendor-onboarding/applications/` (multipart) | Fields: `vendor_name, email, phone, phone_verified, business_name, gst_tax_id, address, city, state, zip_code, latitude, longitude, category_ids[]`, `shop_hours_payload` (JSON string of `{day_of_week, start_time "HH:MM", end_time}`), `employees_payload` (JSON string of `{client_id, full_name, phone, role, specialties, availability[]}`; **required for service categories**), files `business_license_files`, `id_proof_files`, `bank_detail_files`, `supporting_files`. Returns the application with `status`. |
+| Submit application | `POST /api/vendor-onboarding/applications/` (multipart) | Fields: `vendor_name, email, phone, business_name, gst_tax_id, address, city, state, zip_code, latitude, longitude, category_ids[]`, `shop_hours_payload` (JSON string of `{day_of_week, start_time "HH:MM", end_time}`), `employees_payload` (JSON string of `{client_id, full_name, phone, role, specialties, availability[]}`; **required for service categories**), optional `bank_account_holder_name, bank_name, account_number, ifsc_code, upi_id`, optional `product_selections_payload`, files `business_license_files`, `id_proof_files`, `bank_detail_files`, `supporting_files`. Returns the application with `application_number`, `status`, `vendor_type`, `requires_starter_products`, `min_starter_products` and, for product sellers, a `selection_token` (2 h). `phone_verified` is still sent for older servers; the update derives it from the server's OTP records. |
+| Starter-product catalogue | `GET /api/vendor-onboarding/master-products/?search=&category=1,2&page=` | Public. Active physical catalogue products: `{id, name, image, brand_name, category, category_name, unit_name, selling_price, max_retail_price}`. A top-level category also matches its subcategories. |
+| Save starter products | `PUT /api/vendor-onboarding/applications/<id>/products/` `{token, items: [{master_product_id, price?, stock?}]}` | ≥ 5 distinct active products, price ≤ MRP, stock 0–100000. Replaces the selection. `403` bad/expired token, `409` once reviewed (approved/rejected/active…). |
+| Application status | `POST /api/vendor-onboarding/applications/status/` `{phone, otp}` | OTP from send-otp. Returns `{applications: [{application_number, business_name, status, status_display, admin_review_note, requested_documents_note, product_selections, can_edit_products, can_sign_in, selection_token, …}]}`. 5 wrong codes lock the number out for 15 minutes (`429`). |
 
-Not supported by the application API: vendor bank account entry (bank documents can be uploaded; bank accounts are added after approval from **Bank accounts**), delivery/service radius, application status lookup after submission (gap G-3).
+**Selling starts on approval.** A product (or hybrid) seller registers, then picks at least 5 starter products with their
+own price and opening stock. Admins can't approve the application until the 5 are chosen. Activation creates the
+vendor account and shop and lists the starter products on it (prices clamped to the current MRP). The vendor can then
+sign in with OTP. Before that, `/api/v2/login/verify-otp` returns 403 and the portal points them to **Check application status**.
+
+Not supported by the application API: delivery/service radius.
 
 ## 4. Dashboard
 
@@ -224,7 +238,7 @@ Gap G-11: withdrawal creation has **no idempotency key, no balance reservation, 
 |---|---|---|---|
 | G-1 | JWT logout does not invalidate refresh tokens | Install `token_blacklist`, `POST /api/v2/logout {refresh}` blacklists it | Medium |
 | G-2 | No hybrid vendor flag | `Shop.business_type: product|service|hybrid` exposed on `store/profile/` | Low |
-| G-3 | No application status lookup | `GET /api/vendor-onboarding/applications/status/?phone=` (OTP-gated) returning `status`, `admin_review_note`, `requested_documents_note` | Medium |
+| G-3 | Onboarding is limited to what the application API collects. Status lookup and starter products are resolved on `claude/vendor-portal-api`. Still missing: document resubmission by the vendor, and description/logo/coverage at registration (set after approval). | Vendor-facing document resubmission endpoint | Low |
 | G-4 | No date-range analytics | `GET /vendor/dashboard/api/reports/summary/?from=&to=` → revenue, counts, by-category, by-payment-method, top products/services, POS vs online | Medium |
 | G-5 | No returns model | `VendorOrderReturn` + action `return` | Low |
 | G-6 | ~~No vendor-readable delivery tracking~~ **Mostly resolved** in api-services `a33a7cc` (rider-search state, rider contact, retry/stop). Remaining: live rider coordinates and ETA for vendors. | `last_latitude/longitude`, `estimated_delivery_time` in the `delivery` block | Low |
@@ -242,6 +256,8 @@ Gap G-11: withdrawal creation has **no idempotency key, no balance reservation, 
 | ID | Finding | Location |
 |---|---|---|
 | **S-1 (critical)** | `POST /api/vendor-onboarding/send-otp/` is unauthenticated and **returns the OTP** for any phone. OTPs are stored in the shared `OTPRecord` table used by `/api/v2/login/verify-otp`, so anyone can obtain a login OTP for any registered phone and receive a JWT — full account takeover (vendors, customers, riders). `verify_otp` also never consumes the record, so a code is reusable for 5 minutes. | `apps/vendor_onboarding/api_views.py::SendOTPAPIView`, `accounts/services.py::OTPService.verify_otp` |
+
+S-1 status: `claude/vendor-portal-api` stops returning the OTP outside `DEBUG`. OTP reuse in `verify_otp` is still open.
 | S-2 | ~~Chat message list/send have no participant check.~~ Fixed upstream in `a33a7cc`. | `apps/chat` |
 | S-3 | Several `/api/v2/...` vendor views are not scoped to the requesting vendor (IDOR): `vendors/orders/<pk>/` (GET/PATCH/DELETE), `vendors/orders/<id>/action/`, `vendors/orders/items/`, `vendors/product/<pk>`, `vendors/shop/product/<pk>/`, `vendors/shop/<pk>/`, `vendors/shop/location/<pk>/`, `vendors/shop-documents/*`, `vendors/profile/<pk>/`, `delivery/track/<uuid>/`. The portal uses the scoped `/vendor/dashboard/api/` equivalents and only calls `vendors/orders/<pk>/` (read-only) after the scoped detail confirms ownership. | both backends |
 | S-4 | `delivery/nearby-partners/` returns riders' licence numbers, government-ID images and live coordinates to any authenticated user. | `api/v2/views.py::NearbyDeliveryPartnersAPIView` |

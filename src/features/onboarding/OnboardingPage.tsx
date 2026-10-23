@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, CheckCircle2, LocateFixed, Plus, Trash2 } from 'lucide-react';
+import { Check, CheckCircle2, LocateFixed, Package, Plus, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, CardBody, Checkbox, Field, Input, Spinner, Textarea } from '@/components/ui';
 import { Logo } from '@/components/layout/Logo';
 import { ErrorState } from '@/components/feedback/ErrorState';
@@ -12,8 +12,18 @@ import { cn } from '@/utils/cn';
 import { uuid } from '@/utils/id';
 import type { OnboardingCategory, VendorApplication } from '@/types/api';
 import { DAYS } from '@/features/employees/AvailabilityPage';
-import { useGetOnboardingCategoriesQuery, useSendOnboardingOtpMutation, useSubmitApplicationMutation, useVerifyOnboardingOtpMutation } from './api';
+import {
+  useGetOnboardingCategoriesQuery,
+  useSaveStarterProductsMutation,
+  useSendOnboardingOtpMutation,
+  useSubmitApplicationMutation,
+  useVerifyOnboardingOtpMutation,
+} from './api';
 import { buildApplicationFormData, validateStep, type OnboardingDraft, type StepId } from './draft';
+import { StarterProductPicker } from './StarterProductPicker';
+import { minStarterProducts, toStarterItems, type StarterDraft } from './starterProducts';
+
+const titleCaseStatus = (status?: string) => (status ? status.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) : 'Submitted');
 
 function flatten(nodes: OnboardingCategory[], depth = 0): (OnboardingCategory & { depth: number })[] {
   return nodes.flatMap((n) => [{ ...n, depth }, ...flatten(n.children ?? [], depth + 1)]);
@@ -35,6 +45,11 @@ const initialDraft: OnboardingDraft = {
   latitude: '',
   longitude: '',
   gstTaxId: '',
+  bankHolder: '',
+  bankName: '',
+  accountNumber: '',
+  ifsc: '',
+  upiId: '',
   shopHours: DAYS.map((_, d) => ({ day_of_week: d, start_time: '10:00', end_time: '20:00', open: d < 6 })),
   employees: [],
   files: { business_license_files: [], id_proof_files: [], bank_detail_files: [], supporting_files: [] },
@@ -46,6 +61,11 @@ export function OnboardingPage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState<VendorApplication | null>(null);
+  // After submitting, product sellers pick their starter products before they are done.
+  const [stage, setStage] = useState<'form' | 'products' | 'done'>('form');
+  const [starterCount, setStarterCount] = useState(0);
+  const [saveStarter, saveStarterState] = useSaveStarterProductsMutation();
+  const [starterError, setStarterError] = useState<string>();
   const categories = useGetOnboardingCategoriesQuery();
   const [sendOtp, sendState] = useSendOnboardingOtpMutation();
   const [verifyOtp, verifyState] = useVerifyOnboardingOtpMutation();
@@ -65,6 +85,8 @@ export function OnboardingPage() {
     ],
     [draft.businessType],
   );
+  const progress = draft.businessType === 'product' ? [...steps, { id: 'products' as const, label: 'Starter products' }] : steps;
+  const progressIndex = stage === 'form' ? stepIndex : progress.length - 1;
   const step = steps[Math.min(stepIndex, steps.length - 1)];
   const set = <K extends keyof OnboardingDraft>(key: K, value: OnboardingDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const flatCategories = useMemo(() => flatten(categories.data ?? []).filter((c) => c.category_type === draft.businessType), [categories.data, draft.businessType]);
@@ -121,13 +143,29 @@ export function OnboardingPage() {
     try {
       const res = await submit(buildApplicationFormData(draft)).unwrap();
       setSubmitted(res);
+      setStage(res.selection_token && res.requires_starter_products !== false ? 'products' : 'done');
+      window.scrollTo?.({ top: 0 });
     } catch (err) {
       if (isApiError(err)) setErrors({ submit: err.message, ...err.fieldErrors });
       else setErrors({ submit: 'Submission failed.' });
     }
   };
 
-  if (submitted) {
+  const onSaveStarter = async (drafts: StarterDraft[]) => {
+    if (!submitted?.selection_token) return;
+    setStarterError(undefined);
+    try {
+      const res = await saveStarter({ id: submitted.id, token: submitted.selection_token, items: toStarterItems(drafts) }).unwrap();
+      setStarterCount(res.product_selections?.length ?? drafts.length);
+      setStage('done');
+      window.scrollTo?.({ top: 0 });
+    } catch (err) {
+      setStarterError(isApiError(err) ? err.message : 'Could not save your products. Try again.');
+    }
+  };
+
+  if (submitted && stage === 'done') {
+    const needsProducts = draft.businessType === 'product';
     return (
       <div className="flex min-h-full items-center justify-center p-4">
         <Card className="w-full max-w-lg">
@@ -137,13 +175,30 @@ export function OnboardingPage() {
             <p className="text-sm text-ink-muted">
               Thank you, {submitted.vendor_name}. Your application for <span className="font-medium">{submitted.business_name}</span> is with the TheNearByShop team for review.
             </p>
-            <div className="flex justify-center">
-              <StatusBadge status={submitted.status || 'pending'} label={`Status: ${submitted.status || 'submitted'}`} />
+            <div className="flex flex-wrap justify-center gap-2">
+              <StatusBadge status={submitted.status || 'pending'} label={`Status: ${titleCaseStatus(submitted.status)}`} />
+              {submitted.application_number && <Badge tone="neutral">Ref {submitted.application_number}</Badge>}
             </div>
-            <p className="text-xs text-ink-subtle">Your account is not verified until the team approves it. You will be contacted on +91 {normalizeIndianMobile(draft.phone)}.</p>
-            <Link to="/login">
-              <Button variant="outline">Back to sign in</Button>
-            </Link>
+            {starterCount > 0 && (
+              <p className="flex items-center justify-center gap-2 text-sm">
+                <Package className="h-4 w-4 text-brand-700" /> {starterCount} starter products saved
+              </p>
+            )}
+            {needsProducts && starterCount === 0 && (
+              <BackendGap gap="update" title="Starter products could not be chosen on this server">
+                The server needs the self-registration update. The team will help you add products after approval.
+              </BackendGap>
+            )}
+            <p className="text-sm font-medium">You will start selling once the team approves your application.</p>
+            <p className="text-xs text-ink-subtle">We will contact you on +91 {normalizeIndianMobile(draft.phone)}. You can check progress any time with your mobile number.</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Link to="/onboarding/status">
+                <Button>Check application status</Button>
+              </Link>
+              <Link to="/login">
+                <Button variant="outline">Back to sign in</Button>
+              </Link>
+            </div>
           </CardBody>
         </Card>
       </div>
@@ -164,9 +219,9 @@ export function OnboardingPage() {
         <h1 className="text-xl font-semibold">Register your business</h1>
         <p className="mt-1 text-sm text-ink-muted">Applications are reviewed by TheNearByShop before your shop goes live.</p>
         <ol className="mt-5 flex flex-wrap gap-2" aria-label="Onboarding progress">
-          {steps.map((s, i) => {
-            const done = i < stepIndex;
-            const current = i === stepIndex;
+          {progress.map((s, i) => {
+            const done = i < progressIndex;
+            const current = i === progressIndex;
             return (
               <li key={s.id} aria-current={current ? 'step' : undefined}>
                 <span className={cn('inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium', current ? 'border-brand-600 bg-brand-600 text-white' : done ? 'border-emerald-600 text-emerald-700' : 'border-line text-ink-subtle')}>
@@ -177,6 +232,32 @@ export function OnboardingPage() {
           })}
         </ol>
 
+        {stage === 'products' && submitted ? (
+          <section className="mt-5 space-y-4" aria-labelledby="starter-heading">
+            <div className="rounded-md border border-emerald-600/30 bg-emerald-50/60 p-3 text-sm dark:bg-emerald-900/10">
+              <p className="font-medium text-emerald-800 dark:text-emerald-200">
+                <Check className="mr-1 inline h-4 w-4" /> Registration saved{submitted.application_number ? ` (ref ${submitted.application_number})` : ''}.
+              </p>
+              <p className="text-emerald-800/80 dark:text-emerald-200/80">One last step before review.</p>
+            </div>
+            <div>
+              <h2 id="starter-heading" className="text-lg font-semibold">
+                Choose at least {minStarterProducts(submitted)} products to start selling
+              </h2>
+              <p className="text-sm text-ink-muted">
+                These go live in your shop when your application is approved. You can add more, and change prices and stock, from the portal later.
+              </p>
+            </div>
+            <StarterProductPicker
+              min={minStarterProducts(submitted)}
+              categoryIds={draft.categoryIds}
+              saving={saveStarterState.isLoading}
+              saveLabel="Save and finish"
+              error={starterError}
+              onSave={onSaveStarter}
+            />
+          </section>
+        ) : (
         <Card className="mt-5">
           <CardBody className="space-y-4">
             {step.id === 'phone' && (
@@ -367,9 +448,25 @@ export function OnboardingPage() {
                     />
                   </Field>
                 ))}
-                <BackendGap gap="G-3" title="Bank account details for payouts are added after approval" className="sm:col-span-2">
-                  Upload a bank proof now; you will add and verify the payout account from Bank accounts once your shop is live.
-                </BackendGap>
+                <fieldset className="grid gap-4 border-t border-line pt-4 sm:col-span-2 sm:grid-cols-2">
+                  <legend className="text-sm font-semibold">Payout account (optional)</legend>
+                  <p className="text-xs text-ink-muted sm:col-span-2">Where your earnings are paid. You can also add it from Bank accounts after approval.</p>
+                  <Field label="Account holder name" error={errors.bankHolder}>
+                    <Input autoComplete="name" value={draft.bankHolder} onChange={(e) => set('bankHolder', e.target.value)} />
+                  </Field>
+                  <Field label="Bank name">
+                    <Input value={draft.bankName} onChange={(e) => set('bankName', e.target.value)} />
+                  </Field>
+                  <Field label="Account number" error={errors.accountNumber}>
+                    <Input inputMode="numeric" autoComplete="off" value={draft.accountNumber} onChange={(e) => set('accountNumber', e.target.value.replace(/[^\d\s]/g, ''))} />
+                  </Field>
+                  <Field label="IFSC" error={errors.ifsc}>
+                    <Input className="uppercase" maxLength={11} value={draft.ifsc} onChange={(e) => set('ifsc', e.target.value.toUpperCase())} />
+                  </Field>
+                  <Field label="UPI ID" error={errors.upiId}>
+                    <Input value={draft.upiId} onChange={(e) => set('upiId', e.target.value.trim())} />
+                  </Field>
+                </fieldset>
               </div>
             )}
 
@@ -386,6 +483,7 @@ export function OnboardingPage() {
                     ['Address', `${draft.address}, ${draft.city}, ${draft.state} ${draft.zipCode}`],
                     ['GSTIN', draft.gstTaxId || '—'],
                     ['Documents', `${Object.values(draft.files).flat().length} file(s)`],
+                    ['Payout account', draft.accountNumber ? `•••• ${draft.accountNumber.replace(/\s/g, '').slice(-4)} · ${draft.ifsc}` : 'Add later'],
                     ...(draft.businessType === 'service' ? [['Employees', String(draft.employees.length)]] : []),
                   ].map(([k, v]) => (
                     <div key={k}>
@@ -398,6 +496,11 @@ export function OnboardingPage() {
                   <Checkbox checked={draft.acceptTerms} onChange={(e) => set('acceptTerms', e.target.checked)} className="mt-0.5" />
                   I confirm the information is correct and agree to TheNearByShop's vendor terms.
                 </label>
+                {draft.businessType === 'product' && (
+                  <p className="rounded-md bg-brand-50/60 p-2 text-ink-muted dark:bg-brand-900/10">
+                    Next, you will pick at least 5 products from our catalogue to start selling.
+                  </p>
+                )}
                 {errors.acceptTerms && <p className="text-red-600">{errors.acceptTerms}</p>}
                 {errors.submit && (
                   <p role="alert" className="rounded-md bg-red-50 p-2 text-red-700 dark:bg-red-900/20">
@@ -423,6 +526,7 @@ export function OnboardingPage() {
             </div>
           </CardBody>
         </Card>
+        )}
       </main>
     </div>
   );

@@ -7,7 +7,8 @@ The business portal for vendors on TheNearByShop, for both **product vendors** (
 ## Backend
 
 All endpoints are served by **api-services**. A few features (full order detail with delivery charges, master-catalogue
-import with price/stock, shop QR codes, delivery state on the scoped order endpoints) need the
+import with price/stock, shop QR codes, delivery state on the scoped order endpoints, starter products and status
+lookup for self-registration) need the
 `claude/vendor-portal-api` branch of api-services; the portal degrades gracefully without it. See
 [API_MAPPING.md → Required api-services version](API_MAPPING.md#required-api-services-version). Live chat needs the
 api-services `websocket` (Daphne) service reachable at `/ws/`.
@@ -24,7 +25,7 @@ api-services `websocket` (Daphne) service reachable at `/ws/`.
 | Area | What works | Limited by the backend (see API_MAPPING) |
 |---|---|---|
 | Auth | Mobile OTP login, JWT with single-flight refresh, session expiry, protected routes, capability-based navigation | Server-side token revocation (G-1) |
-| Onboarding | Multi-step application: phone OTP, business, categories, location, hours and staff (services), GSTIN, documents | Status lookup after submitting (G-3) |
+| Onboarding | Self-registration: phone OTP, business, categories, location, hours and staff (services), GSTIN, documents, optional payout account. Product sellers then **pick at least 5 starter products** with their own price and stock. Selling starts once an admin approves. **Application status** page (`/onboarding/status`): phone + OTP, team notes, change starter products until review | — |
 | Dashboard | Product and service dashboards with live KPIs, a 14-day revenue trend, categories, quick actions, upcoming appointments | Custom date ranges, best sellers, payment mix (G-4) |
 | Orders | List, search, status tabs, detail with items, address and **delivery charges**, timeline, permitted actions with confirmation, new-order polling, **printable A4 invoice** (`/orders/:id/invoice`) | Returns (G-5) |
 | Delivery | Delivery board with live rider-search state, assigned rider name/phone/vehicle, **search again / stop searching**, needs-attention list | Live rider location and ETA (G-6) |
@@ -130,4 +131,4 @@ deploy/             nginx config
 
 * The access token lives in memory only. The refresh token is in `localStorage` so offline POS and page reloads keep working (the backend has no httpOnly-cookie flow). Signing out clears tokens and cached data on the device. Unsynced sales are kept, scoped to their shop.
 * Bank account numbers are sent straight to the server and never stored in the browser. Lists show only the server-masked number.
-* Frontend permission checks are for UX only. The portal uses the shop-scoped `/vendor/dashboard/api/` endpoints wherever they exist. See **S-1…S-4** in API_MAPPING.md for backend issues that need fixing, including a **critical OTP disclosure** in the onboarding API.
+* Frontend permission checks are for UX only. The portal uses the shop-scoped `/vendor/dashboard/api/` endpoints wherever they exist. See **S-1…S-4** in API_MAPPING.md for backend issues that need fixing, including a **critical OTP disclosure** in the onboarding API (fixed on the `claude/vendor-portal-api` branch).

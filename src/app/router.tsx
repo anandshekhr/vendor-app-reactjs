@@ -12,6 +12,7 @@ const page = (loader: () => Promise<Record<string, unknown>>, name: string) =>
 const LoginPage = page(() => import('@/features/auth/LoginPage'), 'LoginPage');
 const VerifyOtpPage = page(() => import('@/features/auth/VerifyOtpPage'), 'VerifyOtpPage');
 const OnboardingPage = page(() => import('@/features/onboarding/OnboardingPage'), 'OnboardingPage');
+const ApplicationStatusPage = page(() => import('@/features/onboarding/ApplicationStatusPage'), 'ApplicationStatusPage');
 const DashboardPage = page(() => import('@/features/dashboard/DashboardPage'), 'DashboardPage');
 const OrdersPage = page(() => import('@/features/orders/OrdersPage'), 'OrdersPage');
 const InvoicePage = page(() => import('@/features/orders/InvoicePage'), 'InvoicePage');
@@ -55,6 +56,7 @@ export const routes: RouteObject[] = [
   { path: '/login', element: publicPage(<RedirectIfAuthenticated><LoginPage /></RedirectIfAuthenticated>) },
   { path: '/verify-otp', element: publicPage(<RedirectIfAuthenticated><VerifyOtpPage /></RedirectIfAuthenticated>) },
   { path: '/onboarding', element: publicPage(<OnboardingPage />) },
+  { path: '/onboarding/status', element: publicPage(<ApplicationStatusPage />) },
   // Full-page printable documents (no app shell).
   { path: '/orders/:id/invoice', element: publicPage(<RequireAuth>{gated('orders', <InvoicePage />)}</RequireAuth>) },
   { path: '/profile/qr/print', element: publicPage(<RequireAuth><QrPrintPage /></RequireAuth>) },
