@@ -1,5 +1,5 @@
 import { api } from '@/services/api';
-import type { ShopDocumentRecord, ShopProfile, StoreHour, VendorMe } from '@/types/api';
+import type { ShopDocumentRecord, ShopProfile, ShopQrResponse, StoreHour, VendorMe } from '@/types/api';
 
 export const profileApi = api.injectEndpoints({
   endpoints: (build) => ({
@@ -36,6 +36,15 @@ export const profileApi = api.injectEndpoints({
       query: (data) => ({ url: '/vendor/dashboard/api/store/documents/', method: 'PATCH', data }),
       invalidatesTags: ['Documents', 'Me'],
     }),
+    /** The shop's QR stickers (stable /qr/r/<code>/ scan URLs managed by api-services qrgenration). */
+    getShopQr: build.query<ShopQrResponse, void>({
+      query: () => '/vendor/dashboard/api/store/qr/',
+      providesTags: ['ShopQr'],
+    }),
+    createShopQr: build.mutation<ShopQrResponse, { table_number?: string }>({
+      query: (data) => ({ url: '/vendor/dashboard/api/store/qr/', method: 'POST', data }),
+      invalidatesTags: ['ShopQr'],
+    }),
   }),
 });
 
@@ -47,4 +56,6 @@ export const {
   useUpdateStoreHoursMutation,
   useGetStoreDocumentsQuery,
   useUpdateStoreDocumentsMutation,
+  useGetShopQrQuery,
+  useCreateShopQrMutation,
 } = profileApi;

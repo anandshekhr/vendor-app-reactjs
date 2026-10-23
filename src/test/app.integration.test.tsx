@@ -62,7 +62,7 @@ describe('chat', () => {
     renderApp('/chat', {
       authenticated: true,
       adapterOverride: (cfg) => {
-        if (cfg.url?.startsWith('/api/v2/chat/rooms/')) {
+        if (cfg.url?.startsWith('/api/v2/chat/conversations/')) {
           const response = { status: 500, statusText: 'err', data: '<html></html>', headers: {}, config: cfg };
           return Promise.reject(new AxiosError('fail', '500', cfg, null, response));
         }
@@ -73,7 +73,7 @@ describe('chat', () => {
   });
 
   it('denies access with a permission message on 403', async () => {
-    renderApp('/chat/room-1', {
+    renderApp('/chat/thread-1', {
       authenticated: true,
       adapterOverride: (cfg) => {
         if (cfg.url?.includes('/messages/')) {
@@ -199,5 +199,118 @@ describe('booking management', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Mark in progress' }));
     await waitFor(() => expect(db.bookings.find((b) => b.id === 300)!.status).toBe('IN_PROGRESS'));
     expect(await screen.findByRole('button', { name: 'Mark completed' })).toBeInTheDocument();
+  });
+});
+
+describe('master catalogue import', () => {
+  it('adds selected products with the vendor price and opening stock', async () => {
+    const user = userEvent.setup();
+    const { db, router } = renderApp('/products/catalog', { authenticated: true });
+    await user.click(await screen.findByLabelText('Select Tata Salt 1kg'));
+    await user.click(screen.getByLabelText('Select Maggi Noodles 280g'));
+    const price = screen.getByLabelText('Selling price for Tata Salt 1kg');
+    await user.clear(price);
+    await user.type(price, '29');
+    const stock = screen.getByLabelText('Opening stock for Tata Salt 1kg');
+    await user.clear(stock);
+    await user.type(stock, '40');
+    await user.click(screen.getByRole('button', { name: /Add 2 to my shop/ }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/products'));
+    expect(db.products.find((p) => p.name === 'Tata Salt 1kg')).toMatchObject({ price: '29.00', stock: 40 });
+    expect(db.products.find((p) => p.name === 'Maggi Noodles 280g')).toMatchObject({ price: '56.00', stock: 0 });
+  });
+
+  it('blocks a selling price above MRP and marks catalogue items already in the shop', async () => {
+    const user = userEvent.setup();
+    const { db } = renderApp('/products/catalog', { authenticated: true });
+    expect(await screen.findByLabelText('Select Amul Taaza Milk 500ml')).toBeDisabled();
+    await user.type(screen.getByLabelText('Search catalogue'), 'Bisleri');
+    await user.click(await screen.findByLabelText('Select Bisleri 1L'));
+    const price = screen.getByLabelText('Selling price for Bisleri 1L');
+    await user.clear(price);
+    await user.type(price, '25');
+    expect(screen.getByText('Above MRP ₹20.00')).toBeInTheDocument();
+    const before = db.products.length;
+    await user.click(screen.getByRole('button', { name: /Add 1 to my shop/ }));
+    expect(await screen.findByText('Fix the highlighted prices or stock first')).toBeInTheDocument();
+    expect(db.products.length).toBe(before);
+  });
+});
+
+describe('invoice', () => {
+  it('prints delivery charges and a grand total that adds up', async () => {
+    renderApp('/orders/1100/invoice', { authenticated: true });
+    expect(await screen.findByText('INVOICE')).toBeInTheDocument();
+    const totals = screen.getByText('Delivery charges').closest('dl')!;
+    expect(within(totals).getByText('25.00')).toBeInTheDocument();
+    expect(within(totals).getByText('Grand total')).toBeInTheDocument();
+    expect(within(totals).queryByText('Adjustment')).not.toBeInTheDocument();
+    expect(screen.getByText(/^Rupees .* Only$/)).toBeInTheDocument();
+  });
+
+  it('is reachable from the order page', async () => {
+    renderApp('/orders/1100', { authenticated: true });
+    expect(await screen.findByRole('link', { name: /Print invoice/ })).toHaveAttribute('href', '/orders/1100/invoice');
+    expect(await screen.findByText('Delivery charges')).toBeInTheDocument();
+  });
+});
+
+describe('shop QR code', () => {
+  it('creates a QR code and offers printing', async () => {
+    const user = userEvent.setup();
+    renderApp('/profile/qr', { authenticated: true });
+    await user.click(await screen.findByRole('button', { name: 'Create my shop QR code' }));
+    const img = await screen.findByAltText(/^QR code [A-Z0-9]{8} for Sharma General Store$/);
+    expect(img.getAttribute('src')).toMatch(/^data:image\/svg\+xml;base64,/);
+    expect(screen.getByRole('link', { name: /^Print$/ }).getAttribute('href')).toMatch(/^\/profile\/qr\/print\?code=/);
+  });
+
+  it('explains when the server lacks the QR endpoint', async () => {
+    renderApp('/profile/qr', {
+      authenticated: true,
+      adapterOverride: (cfg) => {
+        if (cfg.url === '/vendor/dashboard/api/store/qr/') {
+          const response = { status: 404, statusText: 'Not Found', data: { detail: 'Not found.' }, headers: {}, config: cfg };
+          return Promise.reject(new AxiosError('nf', '404', cfg, null, response));
+        }
+        return undefined;
+      },
+    });
+    expect(await screen.findByText('Your API server does not have the shop QR endpoint yet')).toBeInTheDocument();
+  });
+});
+
+describe('delivery rider search', () => {
+  it('shows rider-search state and restarts the search when no rider was found', async () => {
+    const user = userEvent.setup();
+    renderApp('/orders/1096', { authenticated: true });
+    expect(await screen.findByText('No rider found')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Search for a rider again' }));
+    expect(await screen.findByText('Searching for rider')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Assign partner' })).not.toBeInTheDocument();
+  });
+
+  it('shows the assigned rider with a phone link', async () => {
+    renderApp('/orders/1095', { authenticated: true });
+    expect(await screen.findByText('Ravi Kumar')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /9900000001/ })).toHaveAttribute('href', 'tel:9900000001');
+  });
+});
+
+describe('chat conversations', () => {
+  it('lists threads with unread counts, opens one and sends a message', async () => {
+    const user = userEvent.setup();
+    renderApp('/chat', { authenticated: true });
+    expect(await screen.findByLabelText('1 unread')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Priya Sharma/ }));
+    expect(await screen.findByText('Is the paneer fresh today?')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Message'), 'Yes, made this morning');
+    await user.click(screen.getByRole('button', { name: 'Send message' }));
+    expect(await screen.findByText('Yes, made this morning')).toBeInTheDocument();
+  });
+
+  it('opens the conversation linked to an order', async () => {
+    const { router } = renderApp('/chat?order=5000', { authenticated: true });
+    await waitFor(() => expect(router.state.location.pathname).toBe('/chat/thread-1'));
   });
 });

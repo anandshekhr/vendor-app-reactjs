@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PackageCheck, Truck, Timer, RefreshCw } from 'lucide-react';
-import { Button, Card, CardHeader } from '@/components/ui';
+import { Badge, Button, Card, CardHeader } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatCard } from '@/components/layout/StatCard';
 import { DataTable } from '@/components/tables/DataTable';
@@ -14,6 +14,8 @@ import { config } from '@/constants/config';
 import { formatCurrency, formatDateTime } from '@/utils/format';
 import { useListOrdersQuery } from '@/features/orders/api';
 import { AssignPartnerDialog } from './AssignPartnerDialog';
+import { DELIVERY_STATE_INFO } from './state';
+import { DeliveryStatusCard } from './DeliveryStatusCard';
 
 const TABS = [
   { value: 'ready-for-pickup', label: 'Awaiting pickup' },
@@ -34,6 +36,7 @@ export function DeliveriesPage() {
   const transit = useListOrdersQuery({ status: 'out-for-delivery', page: 1 }, poll);
   const delivered = useListOrdersQuery({ status: 'delivered', page: 1 }, poll);
   const list = useListOrdersQuery({ status: tab, page }, poll);
+  const needsAttention = (awaiting.data?.results ?? []).filter((o) => o.delivery && (o.delivery.can_retry || o.delivery.state === 'not_found'));
 
   return (
     <>
@@ -51,9 +54,30 @@ export function DeliveriesPage() {
         <StatCard label="In transit" value={transit.data?.count ?? '—'} icon={<Truck className="h-4 w-4" />} loading={transit.isLoading} />
         <StatCard label="Delivered (all time)" value={delivered.data?.count ?? '—'} icon={<PackageCheck className="h-4 w-4" />} loading={delivered.isLoading} />
       </div>
-      <BackendGap className="mb-5" gap="G-6" title="Live partner location, ETA and failed-delivery details are unavailable">
-        The backend does not yet expose delivery assignments to vendors, so the map and partner contact are disabled rather than estimated.
-      </BackendGap>
+      {list.data && list.data.results.length > 0 && list.data.results[0].delivery === undefined ? (
+        <BackendGap className="mb-5" gap="G-6" title="Rider details need the api-services vendor-portal update">
+          Until it is deployed, only the order status is shown here.
+        </BackendGap>
+      ) : (
+        <BackendGap className="mb-5" gap="G-6" title="Live rider location and ETA are not exposed to vendors yet">
+          Rider search state, the assigned rider and their phone number are shown once available.
+        </BackendGap>
+      )}
+      {needsAttention.length > 0 && (
+        <Card className="mb-5">
+          <CardHeader title="Needs your attention" description="No rider found, search stopped, or the delivery service was unreachable." />
+          <div className="space-y-3 p-4">
+            {needsAttention.map((o) => (
+              <div key={o.id}>
+                <p className="mb-1 text-sm font-medium">
+                  Order #{o.id} · {o.customer_name || 'Customer'}
+                </p>
+                <DeliveryStatusCard vendorOrderId={o.id} delivery={o.delivery!} />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
       <Card>
         <CardHeader title="Delivery queue" />
         <Tabs
@@ -81,11 +105,36 @@ export function DeliveriesPage() {
             { key: 'total', header: 'Total', cell: (o) => formatCurrency(o.total_amount), align: 'right', hideOnMobile: true },
             { key: 'status', header: 'Status', cell: (o) => <StatusBadge status={o.status} /> },
             {
+              key: 'rider',
+              header: 'Rider',
+              cell: (o) =>
+                o.delivery && o.delivery.state !== 'not_requested' ? (
+                  <div>
+                    <Badge tone={DELIVERY_STATE_INFO[o.delivery.state]?.tone ?? 'neutral'}>{DELIVERY_STATE_INFO[o.delivery.state]?.label ?? o.delivery.state}</Badge>
+                    {o.delivery.rider && (
+                      <p className="mt-0.5 text-xs text-ink-muted">
+                        {o.delivery.rider.name}
+                        {o.delivery.rider.phone && (
+                          <>
+                            {' · '}
+                            <a href={`tel:${o.delivery.rider.phone}`} onClick={(e) => e.stopPropagation()} className="text-brand-700 hover:underline">
+                              {o.delivery.rider.phone}
+                            </a>
+                          </>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-ink-subtle">—</span>
+                ),
+            },
+            {
               key: 'act',
               header: <span className="sr-only">Actions</span>,
               align: 'right',
               cell: (o) =>
-                o.status === 'ready-for-pickup' ? (
+                o.status === 'ready-for-pickup' && !o.delivery ? (
                   <Button
                     size="sm"
                     variant="outline"

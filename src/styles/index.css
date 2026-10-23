@@ -54,4 +54,12 @@
     inset: 0 auto auto 0;
     width: 80mm;
   }
+  .print-area.print-a4 {
+    position: static;
+    width: auto;
+  }
+  .print-area * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }

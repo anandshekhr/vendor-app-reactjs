@@ -12,7 +12,6 @@ import { useToast } from '@/hooks/useToast';
 import { formatCurrency, formatNumber } from '@/utils/format';
 import type { ProductListItem } from '@/types/api';
 import { useBulkDeleteProductsMutation, useBulkUpdateProductsMutation, useListProductsQuery, type ProductListParams } from './api';
-import { MasterCatalogDialog } from './MasterCatalogDialog';
 
 function sortRows(rows: ProductListItem[], sort: SortState): ProductListItem[] {
   if (!sort) return rows;
@@ -43,7 +42,6 @@ export function ProductsPage() {
   const [sort, setSort] = useState<SortState>(null);
   const [selected, setSelected] = useState<Set<string | number>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [catalogOpen, setCatalogOpen] = useState(false);
   const { data, isLoading, isFetching, error, refetch } = useListProductsQuery({ search: q, status, page });
   const [bulkUpdate, bulkUpdateState] = useBulkUpdateProductsMutation();
   const [bulkDelete, bulkDeleteState] = useBulkDeleteProductsMutation();
@@ -77,9 +75,11 @@ export function ProductsPage() {
         description="Your shop catalogue. Stock changes are made from Inventory or the scanner."
         actions={
           <>
-            <Button variant="outline" leftIcon={<Library className="h-4 w-4" />} onClick={() => setCatalogOpen(true)}>
-              Add from catalogue
-            </Button>
+            <Link to="/products/catalog">
+              <Button variant="outline" leftIcon={<Library className="h-4 w-4" />}>
+                Add from master catalogue
+              </Button>
+            </Link>
             <Link to="/products/new">
               <Button leftIcon={<Plus className="h-4 w-4" />}>Add product</Button>
             </Link>
@@ -151,9 +151,14 @@ export function ProductsPage() {
               description={q || status ? 'Adjust the search or filter.' : 'Add your first product or import from the TheNearByShop catalogue.'}
               action={
                 !q && !status ? (
-                  <Link to="/products/new">
-                    <Button>Add product</Button>
-                  </Link>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Link to="/products/catalog">
+                      <Button leftIcon={<Library className="h-4 w-4" />}>Add from master catalogue</Button>
+                    </Link>
+                    <Link to="/products/new">
+                      <Button variant="outline">Create a product</Button>
+                    </Link>
+                  </div>
                 ) : undefined
               }
             />
@@ -235,7 +240,6 @@ export function ProductsPage() {
         description="Deleted products are removed from your shop and the POS. Past orders keep their item snapshot."
         confirmLabel="Delete"
       />
-      <MasterCatalogDialog open={catalogOpen} onClose={() => setCatalogOpen(false)} />
     </>
   );
 }

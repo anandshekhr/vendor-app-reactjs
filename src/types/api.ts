@@ -154,6 +154,30 @@ export type VendorOrderStatus =
   | 'delivered'
   | 'cancelled';
 
+/** Rider-search state from api-services delivery_platform/vendor_delivery.py. */
+export type DeliveryState =
+  | 'not_requested'
+  | 'starting'
+  | 'searching'
+  | 'not_found'
+  | 'rider_found'
+  | 'assigned'
+  | 'picked_up'
+  | 'delivered'
+  | 'stopped'
+  | 'cancelled'
+  | 'failed'
+  | 'error';
+
+export interface DeliverySummary {
+  state: DeliveryState;
+  platform_status: string | null;
+  rider: { name: string; phone: string; vehicle_type: string } | null;
+  can_retry: boolean;
+  can_stop: boolean;
+  updated_at?: ISODateTime;
+}
+
 export interface OrderListItem {
   id: number;
   customer_name: string;
@@ -163,6 +187,9 @@ export interface OrderListItem {
   status: VendorOrderStatus;
   status_display: string;
   is_paid: boolean;
+  /** Present once the api-services vendor-portal update is deployed. */
+  source?: 'online' | 'pos';
+  delivery?: DeliverySummary;
   created_at: ISODateTime;
 }
 
@@ -188,6 +215,23 @@ export interface OrderDetail {
   created_at: ISODateTime;
   delivered_at: ISODateTime | null;
   history: OrderHistoryEntry[];
+  // Added by the api-services vendor-portal update (shop-scoped). Optional so older servers still work.
+  customer_address?: Record<string, unknown> | null;
+  item_total?: Decimal;
+  discount_amount?: Decimal;
+  tax_amount?: Decimal;
+  /** Delivery charge for this shop's part of the order; already included in total_amount. */
+  shipping_amount?: Decimal;
+  source?: 'online' | 'pos';
+  items?: VendorOrderItem[];
+  payments?: { provider: string; amount: Decimal; status: string; created_at: ISODateTime }[];
+  invoice_url?: string | null;
+  platform_order_id?: number | null;
+  delivery?: DeliverySummary;
+  accepted_at?: ISODateTime | null;
+  ready_at?: ISODateTime | null;
+  out_for_delivery_at?: ISODateTime | null;
+  cancelled_at?: ISODateTime | null;
 }
 
 export interface VendorOrderItem {
@@ -213,6 +257,7 @@ export interface VendorOrderFull {
   item_total: Decimal;
   discount_amount: Decimal;
   tax_amount: Decimal;
+  shipping_amount?: Decimal;
   total_amount: Decimal;
   status: VendorOrderStatus;
   status_display: string;
@@ -327,6 +372,7 @@ export interface MasterCatalogItem {
   id: number;
   name: string;
   sku: string;
+  barcode?: string | null;
   image: string | null;
   category_name: string | null;
   unit_name: string | null;
@@ -571,26 +617,38 @@ export interface Withdrawal {
 
 // ─── Chat ────────────────────────────────────────────────────────────────────
 
-export interface ChatRoom {
+/** apps.chat ChatThreadSerializer (/api/v2/chat/conversations/). */
+export interface ChatThread {
   id: string;
-  customer?: number;
-  customer_name?: string;
-  vendor?: number;
-  vendor_name?: string;
-  last_message_at?: ISODateTime | null;
-  last_message?: string | null;
-  unread_count?: number;
-  is_active?: boolean;
-  created_at?: ISODateTime;
+  customer: { id: number; name: string; phone_number: string };
+  vendor: { id: number; business_name: string; slug: string | null };
+  shop: { id: number; name: string } | null;
+  /** Platform (customer) order id, not the vendor order id. */
+  order_id: number | null;
+  service_booking_id: number | null;
+  status: 'ACTIVE' | 'CLOSED' | 'BLOCKED';
+  last_message: ChatMessage | null;
+  unread_count: number;
+  last_message_at: ISODateTime | null;
+  created_at: ISODateTime;
 }
 
+export type ChatMessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'AUDIO' | 'SYSTEM';
+
+/** apps.chat ChatMessageSerializer. */
 export interface ChatMessage {
   id: string;
-  sender: number;
-  sender_name: string;
+  thread: string;
+  sender: { id: number; name: string };
+  sender_type: 'USER' | 'VENDOR' | 'SYSTEM';
+  message_type: ChatMessageType;
   message: string;
+  attachment: { url: string | null; file_type: string; file_size: number; original_filename: string } | null;
+  reply_to: { id: string; message: string; message_type: ChatMessageType; sender_id: number; created_at: ISODateTime } | null;
   is_read: boolean;
+  read_at: ISODateTime | null;
   created_at: ISODateTime;
+  updated_at: ISODateTime;
 }
 
 // ─── Onboarding ──────────────────────────────────────────────────────────────
@@ -612,4 +670,24 @@ export interface VendorApplication {
   admin_review_note?: string;
   requested_documents_note?: string;
   created_at: ISODateTime;
+}
+
+// ─── Shop QR ─────────────────────────────────────────────────────────────────
+
+export interface ShopQrCode {
+  code: string;
+  scan_url: string;
+  /** SVG data URI rendered by the server. */
+  qr_svg: string;
+  table_number: string | null;
+  scan_count: number;
+  last_scanned_at: ISODateTime | null;
+  assigned_at: ISODateTime | null;
+}
+
+export interface ShopQrResponse {
+  shop: { id: number; name: string; slug: string | null };
+  shop_url: string | null;
+  max_codes: number;
+  codes: ShopQrCode[];
 }

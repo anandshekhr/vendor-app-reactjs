@@ -3,6 +3,7 @@
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
   readonly VITE_VENDOR_API_BASE_URL?: string;
+  readonly VITE_WS_BASE_URL?: string;
   readonly VITE_USE_MOCK_API?: string;
   readonly VITE_GOOGLE_MAPS_API_KEY?: string;
   readonly VITE_OFFLINE_PAYMENT_METHODS?: string;

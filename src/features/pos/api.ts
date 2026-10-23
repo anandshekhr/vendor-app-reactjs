@@ -1,6 +1,9 @@
 import { api } from '@/services/api';
 import type { PosCheckoutRequest, PosProduct, VendorOrderFull } from '@/types/api';
 
+// POS is served by api-services (/api/v2/vendors/pos/*). `target: 'vendor'` resolves to the same origin unless
+// VITE_VENDOR_API_BASE_URL points it at a separate deployment.
+
 export const posApi = api.injectEndpoints({
   endpoints: (build) => ({
     posLookupBarcode: build.query<PosProduct, string>({

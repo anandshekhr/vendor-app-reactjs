@@ -4,6 +4,14 @@ The business portal for vendors on TheNearByShop, for both **product vendors** (
 
 > The previous React Native app now lives in [`legacy-react-native/`](legacy-react-native/), unchanged. Its API layer pointed at endpoints the backend doesn't have, so this portal does not reuse it.
 
+## Backend
+
+All endpoints are served by **api-services**. A few features (full order detail with delivery charges, master-catalogue
+import with price/stock, shop QR codes, delivery state on the scoped order endpoints) need the
+`claude/vendor-portal-api` branch of api-services; the portal degrades gracefully without it. See
+[API_MAPPING.md → Required api-services version](API_MAPPING.md#required-api-services-version). Live chat needs the
+api-services `websocket` (Daphne) service reachable at `/ws/`.
+
 ## Documentation
 
 | Document | Contents |
@@ -18,18 +26,18 @@ The business portal for vendors on TheNearByShop, for both **product vendors** (
 | Auth | Mobile OTP login, JWT with single-flight refresh, session expiry, protected routes, capability-based navigation | Server-side token revocation (G-1) |
 | Onboarding | Multi-step application: phone OTP, business, categories, location, hours and staff (services), GSTIN, documents | Status lookup after submitting (G-3) |
 | Dashboard | Product and service dashboards with live KPIs, a 14-day revenue trend, categories, quick actions, upcoming appointments | Custom date ranges, best sellers, payment mix (G-4) |
-| Orders | List, search, status tabs, detail with items, timeline, permitted actions with confirmation, new-order polling | Returns (G-5) |
-| Delivery | Delivery queue by stage, assigning a nearby partner, progress derived from order status | Partner location, ETA and live map (G-6) |
-| Products | CRUD with server-generated SKU, barcode registration, bulk activate/deactivate/delete, master catalogue import | Variants, tax, batch/expiry (G-7) |
+| Orders | List, search, status tabs, detail with items, address and **delivery charges**, timeline, permitted actions with confirmation, new-order polling, **printable A4 invoice** (`/orders/:id/invoice`) | Returns (G-5) |
+| Delivery | Delivery board with live rider-search state, assigned rider name/phone/vehicle, **search again / stop searching**, needs-attention list | Live rider location and ETA (G-6) |
+| Products | CRUD with server-generated SKU, barcode registration, bulk activate/deactivate/delete, **add from master catalogue** with your own selling price and opening stock (`/products/catalog`) | Variants, tax, batch/expiry (G-7) |
 | Inventory | Stock summary, stock levels, typed adjustments showing the server's before/after values, low-stock reorder list, a local adjustment log | Server stock ledger and row locking (G-8) |
 | Scanner | Camera (ZXing) with continuous scanning, USB/Bluetooth wedge scanners, manual entry, unknown barcode → create product | — |
 | POS | Product grid, scan-to-add, quantity controls, walk-in or named customer, cash/UPI/card, printable receipt, sales history | Discounts and tax rules, refunds (G-9) |
 | Offline POS | IndexedDB catalogue, offline cash sales, provisional receipts, idempotency keys, safe sync, conflict and unknown-outcome reconciliation | Server-side idempotency (G-9) |
 | Services | Shop services from the catalogue, bookings with lifecycle actions, rescheduling, balance collection, staff list, weekly availability, server-computed slots | Accept/reject, assigning staff, staff CRUD (G-10) |
 | Customers | Directory built from your own orders | Customer API (G-12) |
-| Chat | Inbox and conversation over the existing chat API, polling, failed-message retry, explicit error states | Backend message endpoints are broken; no realtime (G-13) |
+| Chat | Inbox with unread counts, order-linked threads, **real-time over WebSocket** (typing, read receipts) with polling fallback, image/PDF attachments, failed-message retry, close conversation | Vendors can't start a thread (customers do) |
 | Finance | Wallet balances, transactions, bank accounts (masked, with verification status), withdrawal flow with review and reference ID | Idempotency and balance reservation (G-11) |
-| Profile | Storefront, logo/banner, opening hours, accepting-orders toggle, GSTIN/PAN/registration, KYC status | Address and map editing (S-3), holidays and coverage (G-2) |
+| Profile | Storefront, logo/banner, opening hours, accepting-orders toggle, GSTIN/PAN/registration, KYC status, **shop QR codes** (per counter/table) with A4 poster, 4-card and sticker print layouts | Address and map editing (S-3), holidays and coverage (G-2) |
 | Reports | Sales, stock, bookings and payouts, with CSV export | Date-range reports (G-4) |
 | Notifications | In-app feed for new orders and bookings, low stock and sync problems | Push and server-side feed (G-14) |
 
@@ -50,7 +58,8 @@ To work without a backend, set `VITE_USE_MOCK_API=true` in `.env`. Then sign in 
 | Variable | Description |
 |---|---|
 | `VITE_API_BASE_URL` | Main API origin (`api-services`), e.g. `https://api.thenearbyshop.com` (**required**) |
-| `VITE_VENDOR_API_BASE_URL` | Vendor-service origin for POS endpoints. Leave empty if your gateway already routes `/api/v2/vendors/pos/*` |
+| `VITE_VENDOR_API_BASE_URL` | Optional. POS is served by api-services; set only to send POS calls to a separate deployment |
+| `VITE_WS_BASE_URL` | Optional WebSocket origin for live chat. Defaults to `VITE_API_BASE_URL` with `ws(s)://` |
 | `VITE_USE_MOCK_API` | `true` turns on the in-browser mock (development only) |
 | `VITE_GOOGLE_MAPS_API_KEY` | Reserved for the delivery map (stays disabled until G-6 is fixed) |
 | `VITE_OFFLINE_PAYMENT_METHODS` | Payment methods allowed offline (default `cash`) |

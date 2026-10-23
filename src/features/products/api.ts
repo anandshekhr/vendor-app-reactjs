@@ -8,6 +8,12 @@ export interface ProductListParams {
   page?: number;
 }
 
+export interface BulkAddResult {
+  created_count: number;
+  skipped_count: number;
+  created: ProductListItem[];
+}
+
 export type ProductWrite = Partial<Omit<ProductDetail, 'id' | 'sku' | 'created_at' | 'updated_at' | 'image'>>;
 
 export const productsApi = api.injectEndpoints({
@@ -65,13 +71,22 @@ export const productsApi = api.injectEndpoints({
       providesTags: ['Units'],
       keepUnusedDataFor: 3600,
     }),
-    listMasterCatalog: build.query<Paginated<MasterCatalogItem>, { search?: string; page?: number }>({
-      query: ({ search, page = 1 }) => ({ url: '/vendor/dashboard/api/products/master-catalog/', params: { search, page } }),
+    listMasterCatalog: build.query<Paginated<MasterCatalogItem>, { search?: string; category?: number | ''; page?: number }>({
+      query: ({ search, category, page = 1 }) => ({ url: '/vendor/dashboard/api/products/master-catalog/', params: { search, category, page } }),
       transformResponse: (data: unknown) => normalizePage<MasterCatalogItem>(data),
+      providesTags: [{ type: 'Products', id: 'MASTER' }],
     }),
-    bulkAddFromMaster: build.mutation<{ created_count: number; skipped_count: number }, number[]>({
-      query: (product_ids) => ({ url: '/vendor/dashboard/api/products/bulk-add/', method: 'POST', data: { product_ids } }),
-      invalidatesTags: [{ type: 'Products', id: 'LIST' }, 'Stock', 'Dashboard'],
+    /**
+     * Creates shop products from the master catalogue. `items` carry the vendor's selling price and opening stock;
+     * `product_ids` is sent too so servers predating per-item overrides still import (at catalogue price, zero stock).
+     */
+    bulkAddFromMaster: build.mutation<BulkAddResult, { master_product_id: number; price?: string; stock?: number }[]>({
+      query: (items) => ({
+        url: '/vendor/dashboard/api/products/bulk-add/',
+        method: 'POST',
+        data: { product_ids: items.map((i) => i.master_product_id), items },
+      }),
+      invalidatesTags: [{ type: 'Products', id: 'LIST' }, { type: 'Products', id: 'MASTER' }, 'Stock', 'Dashboard'],
     }),
   }),
 });

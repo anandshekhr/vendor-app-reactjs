@@ -4,7 +4,9 @@ import type {
   BookingListItem,
   Category,
   ChatMessage,
-  ChatRoom,
+  ChatThread,
+  DeliverySummary,
+  MasterCatalogItem,
   CatalogService,
   OnboardingCategory,
   ProductDetail,
@@ -121,8 +123,10 @@ export function createMockDb() {
       unit_price: finalPrice(p).toFixed(2),
       line_total: (finalPrice(p) * (j + 1)).toFixed(2),
     }));
-    const total = lines.reduce((s, l) => s + Number(l.line_total), 0);
+    const itemTotal = lines.reduce((s, l) => s + Number(l.line_total), 0);
     const pos = !cname;
+    const shipping = pos ? 0 : 25;
+    const total = itemTotal + shipping;
     return {
       id: 1100 - i,
       order: pos ? null : 5000 + i,
@@ -132,9 +136,10 @@ export function createMockDb() {
       customer_name: cname,
       customer_phone: cphone,
       customer_address: pos ? null : { address_line1: '12 MG Road', city: 'Bengaluru', state: 'Karnataka', pincode: '560001' },
-      item_total: total.toFixed(2),
+      item_total: itemTotal.toFixed(2),
       discount_amount: '0.00',
       tax_amount: '0.00',
+      shipping_amount: shipping.toFixed(2),
       total_amount: total.toFixed(2),
       status: pos ? 'delivered' : status,
       status_display: status,
@@ -209,18 +214,60 @@ export function createMockDb() {
     { id: 41, amount: '1500.00', status: 'completed', status_display: 'Completed', notes: '', bank_account: 1, bank_name: 'State Bank of India', account_masked: '********4521', transaction_id: 'UTR123456789', created_at: iso(6000), processed_at: iso(5000) },
     { id: 42, amount: '2000.00', status: 'pending', status_display: 'Pending', notes: '', bank_account: 1, bank_name: 'State Bank of India', account_masked: '********4521', transaction_id: '', created_at: iso(300), processed_at: null },
   ];
-  const rooms: ChatRoom[] = [
-    { id: 'room-1', customer_name: 'Priya Sharma', last_message: 'Is the paneer fresh today?', last_message_at: iso(12) },
-    { id: 'room-2', customer_name: 'Rahul Verma', last_message: 'Thanks!', last_message_at: iso(300) },
-  ];
+  const msg = (id: string, thread: string, senderId: number, name: string, text: string, minutesAgo: number, read = true): ChatMessage => ({
+    id,
+    thread,
+    sender: { id: senderId, name },
+    sender_type: senderId === 1 ? 'VENDOR' : 'USER',
+    message_type: 'TEXT',
+    message: text,
+    attachment: null,
+    reply_to: null,
+    is_read: read,
+    read_at: null,
+    created_at: iso(minutesAgo),
+    updated_at: iso(minutesAgo),
+  });
   const messages: Record<string, ChatMessage[]> = {
-    'room-1': [{ id: 'm1', sender: 2, sender_name: 'Priya Sharma', message: 'Is the paneer fresh today?', is_read: true, created_at: iso(12) }],
-    'room-2': [
-      { id: 'm2', sender: 3, sender_name: 'Rahul Verma', message: 'Order received', is_read: true, created_at: iso(320) },
-      { id: 'm3', sender: 1, sender_name: 'You', message: 'Glad it reached you!', is_read: true, created_at: iso(310) },
-      { id: 'm4', sender: 3, sender_name: 'Rahul Verma', message: 'Thanks!', is_read: true, created_at: iso(300) },
+    'thread-1': [msg('m1', 'thread-1', 2, 'Priya Sharma', 'Is the paneer fresh today?', 12, false)],
+    'thread-2': [
+      msg('m2', 'thread-2', 3, 'Rahul Verma', 'Order received', 320),
+      msg('m3', 'thread-2', 1, 'You', 'Glad it reached you!', 310),
+      msg('m4', 'thread-2', 3, 'Rahul Verma', 'Thanks!', 300),
     ],
   };
+  const threads: ChatThread[] = [
+    { id: 'thread-1', customer: { id: 2, name: 'Priya Sharma', phone_number: '9876543210' }, vendor: { id: 1, business_name: 'Shop', slug: 'shop' }, shop: { id: 1, name: 'Shop' }, order_id: 5000, service_booking_id: null, status: 'ACTIVE', last_message: null, unread_count: 0, last_message_at: iso(12), created_at: iso(500) },
+    { id: 'thread-2', customer: { id: 3, name: 'Rahul Verma', phone_number: '9812345678' }, vendor: { id: 1, business_name: 'Shop', slug: 'shop' }, shop: { id: 1, name: 'Shop' }, order_id: null, service_booking_id: null, status: 'ACTIVE', last_message: null, unread_count: 0, last_message_at: iso(300), created_at: iso(900) },
+  ];
+  const masterCatalog: MasterCatalogItem[] = [
+    ['Tata Salt 1kg', 'Tata', 'Grocery', 28, 30],
+    ['Aashirvaad Atta 5kg', 'ITC', 'Grocery', 245, 265],
+    ['Fortune Sunflower Oil 1L', 'Adani Wilmar', 'Grocery', 155, 170],
+    ['Amul Taaza Milk 500ml', 'Amul', 'Dairy', 27, 28],
+    ['Britannia Good Day 200g', 'Britannia', 'Snacks', 40, 45],
+    ['Maggi Noodles 280g', 'Nestle', 'Snacks', 56, 60],
+    ['Red Label Tea 500g', 'Tata', 'Beverages', 270, 290],
+    ['Surf Excel 1kg', 'HUL', 'Household', 135, 145],
+    ['Colgate Strong Teeth 200g', 'Colgate', 'Personal care', 105, 110],
+    ['Parle-G 800g', 'Parle', 'Snacks', 85, 90],
+    ['Bisleri 1L', 'Bisleri', 'Beverages', 20, 20],
+    ['Dettol Soap 125g', 'Reckitt', 'Personal care', 45, 50],
+  ].map(([name, brand, cat, sp, mrp], i) => ({
+    id: 7000 + i,
+    name: String(name),
+    sku: `MSTR-${7000 + i}`,
+    barcode: `89040000${String(10 + i)}`,
+    image: null,
+    category_name: String(cat),
+    unit_name: 'Piece',
+    brand_name: String(brand),
+    selling_price: Number(sp).toFixed(2),
+    max_retail_price: Number(mrp).toFixed(2),
+    is_active: true,
+    already_added: i === 3,
+  }));
+  const qrCodes: { code: string; table_number: string | null; scan_count: number; assigned_at: string }[] = [];
 
   const shop: ShopProfile = {
     id: 1,
@@ -279,8 +326,10 @@ export function createMockDb() {
       bankAccounts = v;
     },
     withdrawals,
-    rooms,
+    threads,
     messages,
+    masterCatalog,
+    qrCodes,
     get balance() {
       return balance;
     },
@@ -302,6 +351,8 @@ export function createMockDb() {
       status: o.status,
       status_display: o.status,
       is_paid: o.is_paid,
+      source: o.source,
+      delivery: db.delivery(o),
       created_at: o.created_at,
     }),
     orderDetail: (o: VendorOrderFull) => ({
@@ -309,15 +360,41 @@ export function createMockDb() {
       external_id: o.external_id,
       customer_name: o.customer_name,
       customer_phone: o.customer_phone,
+      customer_address: o.customer_address,
+      item_total: o.item_total,
+      discount_amount: o.discount_amount,
+      tax_amount: o.tax_amount,
+      shipping_amount: o.shipping_amount,
       total_amount: o.total_amount,
       status: o.status,
       status_display: o.status,
+      source: o.source,
       is_paid: o.is_paid,
       rejection_reason: o.rejection_reason,
       created_at: o.created_at,
       delivered_at: o.delivered_at,
+      items: o.items,
+      payments: o.source === 'pos' ? [{ provider: 'cash', amount: o.total_amount, status: 'paid', created_at: o.created_at }] : [],
+      invoice_url: null,
+      platform_order_id: o.order,
+      delivery: db.delivery(o),
       history: history[o.id] ?? [{ id: o.id * 10, from_status: null, to_status: 'created', note: null, changed_by: null, created_at: o.created_at }],
     }),
+    deliveryOverrides: {} as Record<number, DeliverySummary['state']>,
+    delivery(o: VendorOrderFull): DeliverySummary {
+      const fulfilment = ['ready-for-pickup', 'out-for-delivery', 'delivered'].includes(o.status);
+      if (!o.order || !fulfilment) return { state: 'not_requested', platform_status: null, rider: null, can_retry: false, can_stop: false };
+      const state = db.deliveryOverrides[o.id] ?? (o.status === 'delivered' ? 'delivered' : o.status === 'out-for-delivery' ? 'picked_up' : 'not_found');
+      const rider = ['assigned', 'picked_up', 'delivered'].includes(state) ? { name: 'Ravi Kumar', phone: '9900000001', vehicle_type: 'bike' } : null;
+      return {
+        state,
+        platform_status: state.toUpperCase(),
+        rider,
+        can_retry: ['not_found', 'stopped', 'cancelled', 'error'].includes(state) && o.status === 'ready-for-pickup',
+        can_stop: ['searching', 'not_found', 'rider_found'].includes(state),
+        updated_at: new Date(now - 120_000).toISOString(),
+      };
+    },
     applyOrderAction(o: VendorOrderFull, action: string, note: string): string | null {
       const to = ACTION_TO_STATUS[action];
       if (!to) return 'Unknown action.';
@@ -529,6 +606,100 @@ export function createMockDb() {
       if (a.is_primary) bankAccounts.forEach((x) => (x.is_primary = false));
       bankAccounts.push(a);
       return a;
+    },
+    bulkAdd(body: any): [number, unknown] {
+      const overrides = new Map<number, { price?: string; stock?: number }>((body.items ?? []).map((i: any) => [i.master_product_id, i]));
+      const ids: number[] = [...new Set<number>([...(body.product_ids ?? []), ...overrides.keys()])];
+      if (ids.length === 0) return [400, { product_ids: ['Select at least one product to add.'] }];
+      const masters = ids.map((id) => masterCatalog.find((m) => m.id === id));
+      if (masters.some((m) => !m)) return [400, { product_ids: 'Unknown master product id(s)' }];
+      const tooHigh = masters.filter((m) => {
+        const p = overrides.get(m!.id)?.price;
+        return p !== undefined && Number(p) > Number(m!.max_retail_price);
+      });
+      if (tooHigh.length) return [400, { items: tooHigh.map((m) => `${m!.name}: selling price is above MRP ${m!.max_retail_price}`) }];
+      const created: unknown[] = [];
+      let skipped = 0;
+      for (const m of masters) {
+        if (m!.already_added || products.some((p) => p.name === m!.name)) {
+          skipped += 1;
+          continue;
+        }
+        const o = overrides.get(m!.id) ?? {};
+        const p = db.createProduct({ name: m!.name, price: o.price ?? m!.selling_price, mrp: m!.max_retail_price, stock: o.stock ?? 0, is_active: true, low_stock_threshold: 5 });
+        p.barcode = m!.barcode ?? null;
+        created.push(db.productListItem(p));
+      }
+      return [201, { created_count: created.length, skipped_count: skipped, created }];
+    },
+    qrPayload() {
+      return {
+        shop: { id: 1, name: shop.name, slug: 'sharma-general-store' },
+        shop_url: 'https://thenearbyshop.com/shop/sharma-general-store?utm_source=qr',
+        max_codes: 20,
+        codes: qrCodes.map((q) => ({
+          ...q,
+          scan_url: `https://api.thenearbyshop.com/qr/r/${q.code}/`,
+          // Placeholder graphic for development only; the real server renders a scannable QR SVG.
+          qr_svg:
+            'data:image/svg+xml;base64,' +
+            btoa(
+              `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><rect width="29" height="29" fill="#fff"/><path d="M2 2h7v7H2zM20 2h7v7h-7zM2 20h7v7H2z" fill="none" stroke="#000" stroke-width="2"/><rect x="12" y="12" width="5" height="5"/><text x="14.5" y="26" font-size="2" text-anchor="middle">${q.code}</text></svg>`,
+            ),
+          last_scanned_at: null,
+        })),
+      };
+    },
+    createQr(table: string): [number, unknown] {
+      if (qrCodes.length >= 20) return [409, { detail: 'You already have 20 QR codes. Reuse an existing one.' }];
+      const code = Array.from({ length: 8 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('');
+      qrCodes.push({ code, table_number: table || null, scan_count: 0, assigned_at: new Date().toISOString() });
+      return [201, db.qrPayload()];
+    },
+    riderSearch(id: number, action: 'retry' | 'stop'): [number, unknown] {
+      const o = orders.find((x) => x.id === id);
+      if (!o || !o.order) return [409, { detail: 'This order has no delivery.' }];
+      const d = db.delivery(o);
+      if (action === 'retry' && !d.can_retry) return [409, { detail: 'A new search cannot be started right now.' }];
+      if (action === 'stop' && !d.can_stop) return [409, { detail: 'There is no search to stop.' }];
+      db.deliveryOverrides[id] = action === 'retry' ? 'searching' : 'stopped';
+      return [200, { id, status: o.status, delivery: db.delivery(o) }];
+    },
+    threadList() {
+      return threads.map((t) => {
+        const msgs = messages[t.id] ?? [];
+        return { ...t, last_message: msgs[msgs.length - 1] ?? null, unread_count: msgs.filter((m) => !m.is_read && m.sender.id !== 1).length };
+      });
+    },
+    sendMessage(threadId: string, text: string): ChatMessage {
+      const m: ChatMessage = {
+        id: crypto.randomUUID(),
+        thread: threadId,
+        sender: { id: 1, name: 'You' },
+        sender_type: 'VENDOR',
+        message_type: 'TEXT',
+        message: text,
+        attachment: null,
+        reply_to: null,
+        is_read: false,
+        read_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      (messages[threadId] ??= []).push(m);
+      const t = threads.find((x) => x.id === threadId);
+      if (t) t.last_message_at = m.created_at;
+      return m;
+    },
+    markRead(threadId: string): string[] {
+      const ids: string[] = [];
+      for (const m of messages[threadId] ?? []) {
+        if (!m.is_read && m.sender.id !== 1) {
+          m.is_read = true;
+          ids.push(m.id);
+        }
+      }
+      return ids;
     },
     createWithdrawal(body: any): [number, unknown] {
       const amount = Number(body.amount);

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { config } from '@/constants/config';
 import { bookingsApi } from '@/features/bookings/api';
 import { ordersApi } from '@/features/orders/api';
+import { chatApi } from '@/features/chat/api';
 import { useAppDispatch, useAppSelector } from '@/hooks/store';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { formatCurrency } from '@/utils/format';
@@ -26,7 +27,8 @@ export function useActivityPolling() {
   useEffect(() => {
     const wantOrders = can('orders');
     const wantBookings = can('bookings');
-    if (!wantOrders && !wantBookings) return;
+    const wantChat = can('chat');
+    if (!wantOrders && !wantBookings && !wantChat) return;
     let stopped = false;
 
     async function tick() {
@@ -59,6 +61,10 @@ export function useActivityPolling() {
         } catch {
           /* transient — retried on next tick */
         }
+      }
+      if (wantChat) {
+        // Keeps unread counts in the sidebar current; conversations themselves update over WebSocket.
+        dispatch(chatApi.endpoints.listThreads.initiate(undefined, { subscribe: false, forceRefetch: true }));
       }
       if (wantBookings) {
         try {

@@ -7,6 +7,7 @@ COPY . .
 # Build-time configuration (Vite inlines VITE_* variables into the bundle).
 ARG VITE_API_BASE_URL
 ARG VITE_VENDOR_API_BASE_URL=
+ARG VITE_WS_BASE_URL=
 ARG VITE_USE_MOCK_API=false
 ARG VITE_GOOGLE_MAPS_API_KEY=
 ARG VITE_OFFLINE_PAYMENT_METHODS=cash

@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Clock,
   IndianRupee,
+  Library,
   MessageSquare,
   Package,
   PackagePlus,
@@ -49,6 +50,7 @@ interface QuickAction {
 const QUICK_ACTIONS: QuickAction[] = [
   { label: 'Open POS', to: '/pos', icon: ShoppingCart, capability: 'pos' },
   { label: 'Add product', to: '/products/new', icon: PackagePlus, capability: 'products' },
+  { label: 'Add from catalogue', to: '/products/catalog', icon: Library, capability: 'products' },
   { label: 'Scan stock', to: '/scanner', icon: ScanBarcode, capability: 'scanner' },
   { label: 'View orders', to: '/orders', icon: ClipboardList, capability: 'orders' },
   { label: 'Manage bookings', to: '/bookings', icon: CalendarClock, capability: 'bookings' },

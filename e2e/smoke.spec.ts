@@ -111,3 +111,33 @@ test('refreshing a nested route keeps the session', async ({ page }) => {
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Orders' })).toBeVisible();
 });
+
+test('master catalogue: add products with own price and stock', async ({ page }) => {
+  await login(page);
+  await page.goto('/products');
+  await page.getByRole('link', { name: 'Add from master catalogue' }).click();
+  await page.getByLabel('Select Tata Salt 1kg').check();
+  await page.getByLabel('Opening stock for Tata Salt 1kg').fill('24');
+  await page.getByRole('button', { name: /Add 1 to my shop/ }).click();
+  await expect(page).toHaveURL(/\/products$/);
+  await expect(page.getByText('Tata Salt 1kg')).toBeVisible();
+});
+
+test('invoice: A4 invoice with delivery charges', async ({ page }) => {
+  await login(page);
+  await page.goto('/orders/1100');
+  await page.getByRole('link', { name: /Print invoice/ }).click();
+  await expect(page.getByText('INVOICE', { exact: true })).toBeVisible();
+  await expect(page.getByText('Delivery charges')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Print / Save as PDF' })).toBeVisible();
+});
+
+test('shop QR: create and open the print layout', async ({ page }) => {
+  await login(page);
+  await page.goto('/profile/qr');
+  await page.getByRole('button', { name: 'Create my shop QR code' }).click();
+  await page.getByRole('link', { name: 'Print', exact: true }).click();
+  await expect(page.getByRole('radio', { name: /A4 poster/ })).toBeVisible();
+  await page.getByRole('radio', { name: /4 cards/ }).click();
+  await expect(page.getByAltText(/QR code .* for Sharma General Store/)).toBeVisible();
+});

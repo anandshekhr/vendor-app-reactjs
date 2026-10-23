@@ -1,5 +1,5 @@
 import { api } from '@/services/api';
-import type { DeliveryPartner } from '@/types/api';
+import type { DeliveryPartner, DeliverySummary, VendorOrderStatus } from '@/types/api';
 
 export const deliveryApi = api.injectEndpoints({
   endpoints: (build) => ({
@@ -14,7 +14,17 @@ export const deliveryApi = api.injectEndpoints({
       }),
       invalidatesTags: (_r, _e, { vendorOrderId }) => [{ type: 'Order', id: vendorOrderId }, { type: 'Orders', id: 'LIST' }],
     }),
+    /** Start a new rider search (allowed when delivery.can_retry). */
+    retryRiderSearch: build.mutation<{ id: number; status: VendorOrderStatus; delivery: DeliverySummary }, number>({
+      query: (vendorOrderId) => ({ url: `/api/v2/vendors/orders/${vendorOrderId}/delivery/retry/`, method: 'POST' }),
+      invalidatesTags: (_r, _e, id) => [{ type: 'Order', id }, { type: 'Orders', id: 'LIST' }],
+    }),
+    /** Stop searching; the order stays ready for pickup (allowed when delivery.can_stop). */
+    stopRiderSearch: build.mutation<{ id: number; status: VendorOrderStatus; delivery: DeliverySummary }, number>({
+      query: (vendorOrderId) => ({ url: `/api/v2/vendors/orders/${vendorOrderId}/delivery/stop/`, method: 'POST' }),
+      invalidatesTags: (_r, _e, id) => [{ type: 'Order', id }, { type: 'Orders', id: 'LIST' }],
+    }),
   }),
 });
 
-export const { useLazyNearbyPartnersQuery, useAssignPartnerMutation } = deliveryApi;
+export const { useLazyNearbyPartnersQuery, useAssignPartnerMutation, useRetryRiderSearchMutation, useStopRiderSearchMutation } = deliveryApi;

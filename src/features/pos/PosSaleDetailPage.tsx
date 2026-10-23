@@ -1,5 +1,5 @@
-import { useParams } from 'react-router-dom';
-import { ExternalLink, Printer } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
+import { ExternalLink, FileText, Printer } from 'lucide-react';
 import { Button, Card, CardBody, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ErrorState } from '@/components/feedback/ErrorState';
@@ -14,13 +14,15 @@ export function PosSaleDetailPage() {
   const orderId = Number(id);
   const business = useAppSelector((s) => s.auth.business);
   const scoped = useGetOrderQuery(orderId, { skip: !orderId });
-  const full = useGetOrderFullQuery(orderId, { skip: !scoped.data });
+  // Prefer the shop-scoped detail; the unscoped v2 detail is only a fallback for servers without the vendor-portal update.
+  const full = useGetOrderFullQuery(orderId, { skip: !scoped.data || scoped.data.items !== undefined });
 
   if (scoped.error) return <ErrorState error={scoped.error} onRetry={scoped.refetch} />;
   if (full.error) return <ErrorState error={full.error} onRetry={full.refetch} />;
-  if (!full.data) return <Skeleton className="h-96 w-full" />;
-  const o = full.data;
-  const payment = (o as unknown as { payments?: { provider?: string }[] }).payments?.[0]?.provider;
+  const src = scoped.data?.items !== undefined ? scoped.data : full.data;
+  if (!scoped.data || !src) return <Skeleton className="h-96 w-full" />;
+  const o = { ...src, id: scoped.data.id, created_at: scoped.data.created_at, total_amount: scoped.data.total_amount, is_paid: scoped.data.is_paid };
+  const payment = (src as { payments?: { provider?: string }[] }).payments?.[0]?.provider;
 
   return (
     <>
@@ -37,6 +39,11 @@ export function PosSaleDetailPage() {
                 </Button>
               </a>
             )}
+            <Link to={`/orders/${o.id}/invoice`}>
+              <Button variant="outline" leftIcon={<FileText className="h-4 w-4" />}>
+                A4 invoice
+              </Button>
+            </Link>
             <Button onClick={printReceipt} leftIcon={<Printer className="h-4 w-4" />}>
               Print receipt
             </Button>
@@ -57,7 +64,7 @@ export function PosSaleDetailPage() {
                   unitPrice: i.unit_price,
                   lineTotal: i.line_total ?? Number(i.unit_price) * i.quantity,
                 })),
-                itemTotal: o.item_total,
+                itemTotal: o.item_total ?? o.total_amount,
                 discount: o.discount_amount,
                 tax: o.tax_amount,
                 total: o.total_amount,

@@ -5,6 +5,23 @@ found by inspecting the backend source, and lists every gap where the backend
 does not (yet) support a feature. Nothing in the portal calls an endpoint that
 is not listed here.
 
+## Required api-services version
+
+Re-inspected against `api-services` `a33a7cc` (Oct 2026), which added its own POS endpoints, a rebuilt chat app
+(REST + Django Channels), and vendor-facing rider-search state. The portal additionally uses endpoints from the
+**`claude/vendor-portal-api`** branch of api-services (commits `3f3586e`, `2d57972`, 13 new tests):
+
+| Change | Endpoint |
+|---|---|
+| Order detail returns items, address, totals **incl. delivery charge (`shipping_amount`)**, source, payments, `invoice_url`, `platform_order_id`, `delivery` | `GET /vendor/dashboard/api/orders/<id>/` |
+| Order list returns `source` and `delivery` | `GET /vendor/dashboard/api/orders/` |
+| Master import with per-item selling price and opening stock | `POST /vendor/dashboard/api/products/bulk-add/` `{items: [{master_product_id, price?, stock?}]}` |
+| Shop QR stickers (list / mint) | `GET|POST /vendor/dashboard/api/store/qr/` |
+
+Until that branch is deployed the portal degrades gracefully: invoices fall back to the old detail endpoint and show
+the delivery charge as "included in total", catalogue imports warn that the server ignored the price/stock, and the QR
+page explains that the endpoint is missing.
+
 ## Sources inspected
 
 | Repository | What it is | Commit inspected |
@@ -18,7 +35,8 @@ is not listed here.
 | Env var | Purpose | Default |
 |---|---|---|
 | `VITE_API_BASE_URL` | Main API (`api-services`) origin, e.g. `https://api.thenearbyshop.com` | — (required) |
-| `VITE_VENDOR_API_BASE_URL` | Vendor service origin. Only POS endpoints require it. If your gateway routes `/api/v2/vendors/pos/*` to the vendor service, leave it empty and the main origin is used. | `VITE_API_BASE_URL` |
+| `VITE_VENDOR_API_BASE_URL` | Optional. POS is served by api-services (`/api/v2/vendors/pos/*`); set this only to send POS calls to a separate deployment (e.g. the standalone tnbs-vendor-service). | `VITE_API_BASE_URL` |
+| `VITE_WS_BASE_URL` | Optional WebSocket origin for live chat (Django Channels). | `VITE_API_BASE_URL` with `ws(s)://` |
 | `VITE_USE_MOCK_API` | `true` enables the in-browser mock adapter (development only). | `false` |
 | `VITE_GOOGLE_MAPS_API_KEY` | Reserved for the delivery map; the map is disabled until the backend exposes vendor-scoped rider coordinates (see gap G-6). | empty |
 
@@ -90,8 +108,9 @@ Date filters: the backend computes fixed windows only. The portal's range filter
 |---|---|---|
 | List | `GET /vendor/dashboard/api/orders/?status=<status|all>&q=<search>&page=` | Items `{id, customer_name, customer_phone, items_count, total_amount, status, status_display, is_paid, created_at}`. Search covers customer name/phone, external id, numeric id. |
 | New-order polling | `GET /vendor/dashboard/api/orders/poll/?since=<last id>` | `{orders, latest_id}` |
-| Detail (scoped) | `GET /vendor/dashboard/api/orders/<id>/` | `{id, external_id, customer_name, customer_phone, total_amount, status, status_display, is_paid, rejection_reason, created_at, delivered_at, history[]}` |
-| Items, address, totals breakdown, source | `GET /api/v2/vendors/orders/<id>/` | Adds `items[] {product, product_snapshot, quantity, unit_price, line_total}`, `customer_address`, `item_total`, `discount_amount`, `tax_amount`, `source (online|pos)`, `invoice_url`. Only requested **after** the scoped detail call succeeds (see S-3). |
+| Detail (scoped) | `GET /vendor/dashboard/api/orders/<id>/` | `{id, external_id, customer_name, customer_phone, customer_address, item_total, discount_amount, tax_amount, shipping_amount, total_amount, status, status_display, source, is_paid, rejection_reason, created_at, accepted_at, ready_at, out_for_delivery_at, delivered_at, cancelled_at, items[], payments[], history[], invoice_url, platform_order_id, delivery}` (vendor-portal branch). `shipping_amount` is the delivery charge for this shop's part of the order and is already included in `total_amount`. |
+| Fallback for older servers | `GET /api/v2/vendors/orders/<id>/` | Only used when the scoped detail has no `items` (server without the vendor-portal branch), and only **after** the scoped call succeeded (see S-3). Does not include `shipping_amount`. |
+| Printable invoice | Portal page `/orders/<id>/invoice` | A4 tax-invoice layout from the scoped detail: seller (name, address, phone, GSTIN), bill-to, items, subtotal, discount, **delivery charges**, tax, grand total, amount in words. The server-hosted `invoice_url` is also linked. |
 | Status action | `POST /vendor/dashboard/api/orders/<id>/action/` `{action, note}` | Actions → statuses: `accept→accepted`, `reject→rejected`, `mark_preparing→preparing`, `mark_processing→processing`, `mark_ready→ready-for-pickup`, `cancel→cancelled`. Runs `orders.services.order_service.change_vendor_order_status` (syncs customer order + delivery). |
 
 Permitted transitions (mirrored from `VENDOR_ORDER_TRANSITIONS`; the server remains authoritative):
@@ -112,10 +131,12 @@ rejected, cancelled, out-for-delivery, delivered → (none — driven by the del
 | Feature | Method & path | Notes |
 |---|---|---|
 | Orders awaiting pickup / in transit | Orders list with `status=ready-for-pickup` / `out-for-delivery` / `delivered` | Real order status. |
-| Nearby delivery partners | `GET /api/v2/delivery/nearby-partners/?latitude&longitude&radius_km` | Uses the shop location from `vendors/me`. Portal shows only name, vehicle type and availability (see S-4). |
-| Assign partner | `POST /api/v2/o/vendor-orders/<id>/assign-delivery/` `{delivery_partner_id (uuid), notes}` | Ownership enforced server-side. Returns `{assignment_id, status}`. |
+| Rider-search state | `delivery` block on the order list/detail | `{state: not_requested|starting|searching|not_found|rider_found|assigned|picked_up|delivered|stopped|cancelled|failed|error, platform_status, rider: {name, phone, vehicle_type} | null, can_retry, can_stop, updated_at}` from `delivery_platform.vendor_delivery.delivery_summary`. Rider is only included once assigned. |
+| Retry rider search | `POST /api/v2/vendors/orders/<id>/delivery/retry/` | Allowed when `can_retry`. 409 if not allowed, 503 if the delivery platform is unreachable. Owner-scoped. |
+| Stop rider search | `POST /api/v2/vendors/orders/<id>/delivery/stop/` | Allowed when `can_stop`; the order stays ready for pickup. |
+| Legacy manual assignment | `GET /api/v2/delivery/nearby-partners/`, `POST /api/v2/o/vendor-orders/<id>/assign-delivery/` | Only offered on servers that don't return the `delivery` block (assignment is automatic via delivery-platform otherwise). Portal shows only name and vehicle type (see S-4). |
 
-Gap G-6: there is **no vendor-scoped read endpoint** for the `DeliveryAssignment` (partner, status, `last_latitude/longitude`, ETA). The portal therefore shows order-level delivery state only and labels partner/ETA/live map as "not available from the server". It never fabricates a location or ETA.
+Gap G-6 (reduced): live rider coordinates and ETA are still not exposed to vendors, so there is no live map.
 
 ## 7. Products & catalogue
 
@@ -129,7 +150,8 @@ Gap G-6: there is **no vendor-scoped read endpoint** for the `DeliveryAssignment
 | Bulk delete | `POST /api/v2/products/bulk-delete/` `{product_ids}` | Scoped. |
 | Categories | `GET /api/v2/categories/?all=1` | |
 | Units | `GET /api/v2/units/` | |
-| Master catalogue browse / bulk add | `GET /vendor/dashboard/api/products/master-catalog/?search=&category=`, `POST /vendor/dashboard/api/products/bulk-add/ {product_ids}` | |
+| Master catalogue browse | `GET /vendor/dashboard/api/products/master-catalog/?search=&category=&page=` | `{id, name, sku, barcode, image, category_name, unit_name, brand_name, selling_price, max_retail_price, already_added}` |
+| Master catalogue import | `POST /vendor/dashboard/api/products/bulk-add/` `{product_ids, items: [{master_product_id, price, stock}]}` | Portal page `/products/catalog`. Price must not exceed MRP (400). Products already in the shop are skipped and never have stock overwritten. Returns `{created_count, skipped_count, created[]}`; the portal compares `created[]` with what it asked for and warns if an older server ignored price/stock. (The v2 `products/quick-add/` and `products/bulk-add-from-master/` views are not used: the first references non-existent fields and the second overwrites stock on name matches.) |
 
 Not in the schema: variants, tax rate per product, weight/dimensions, batch/expiry, reserved stock (gap G-7). The form omits them rather than collecting data the server would drop. **Stock is not editable on the edit form** — it is changed only through stock operations.
 
@@ -148,9 +170,9 @@ Gap G-8 (high priority): there is **no stock-movement ledger** (no model, no end
 
 | Feature | Method & path | Notes |
 |---|---|---|
-| Lookup by barcode | `GET {vendor}/api/v2/vendors/pos/lookup/?barcode=` | `{id, name, sku, barcode, category_name, price, mrp, final_price, stock, image}` or 404 |
-| Search / catalogue cache | `GET {vendor}/api/v2/vendors/pos/lookup/?q=` | Max 20 rows. Full cache built from the paginated products list. |
-| Checkout | `POST {vendor}/api/v2/vendors/pos/checkout/` | `{items: [{product_id, quantity}], payment_method: cash|card|upi, customer_name, customer_phone}`. Atomic with `select_for_update`; prices from `final_price`; creates `VendorOrder(source='pos', status='delivered', is_paid=True)`. Returns order detail incl. `invoice_url`. |
+| Lookup by barcode | `GET /api/v2/vendors/pos/lookup/?barcode=` | `{id, name, sku, barcode, category_name, price, mrp, final_price, stock, image}` or 404 |
+| Search / catalogue cache | `GET /api/v2/vendors/pos/lookup/?q=` | Max 20 rows. Full cache built from the paginated products list. |
+| Checkout | `POST /api/v2/vendors/pos/checkout/` | `{items: [{product_id, quantity}], payment_method: cash|card|upi, customer_name, customer_phone}`. Atomic with `select_for_update`; prices from `final_price`; creates `VendorOrder(source='pos', status='delivered', is_paid=True)`. Returns order detail incl. `invoice_url`. |
 | Sales history | `GET /api/v2/vendors/orders/` (filter `source === 'pos'` client-side) | No server-side `source` filter (gap G-9). |
 
 Gap G-9: checkout has **no idempotency key** and no server-side discount/tax rules (tax is always 0, discount always 0), and it marks UPI/card as paid immediately with no payment-provider confirmation. See the offline policy below.
@@ -189,7 +211,8 @@ Gap G-11: withdrawal creation has **no idempotency key, no balance reservation, 
 | Feature | Status |
 |---|---|
 | Customers | No vendor customer endpoint. The portal derives a customer directory **from the vendor's own orders** (`customer_name`, `customer_phone`, order count, totals across fetched pages) and labels it as such (gap G-12). |
-| Chat | `GET /api/v2/chat/rooms/` lists threads where the user is customer or vendor. Message list/send (`/api/v2/chat/rooms/<uuid>/messages/[send/]`) filter on a non-existent `room_id` field and have **no participant check**; `ChatRoomSerializer.vendor_name` reads a non-existent attribute. No WebSocket server (plain ASGI, no Channels). The portal implements the inbox against this contract with 15s polling and shows a clear "chat service unavailable" state when the backend errors (gap G-13). |
+| Chat | `GET /api/v2/chat/conversations/` → threads `{id, customer{id,name,phone_number}, shop, order_id (platform order), service_booking_id, status, last_message, unread_count, last_message_at}`; `GET|POST /api/v2/chat/conversations/<uuid>/messages/` (newest first, `page_size`; POST `{text, message_type}` or multipart with `attachment`); `POST .../read/`; `POST .../close/`. Participant-checked server-side. Real-time over `wss://<api>/ws/chat/<uuid>/?token=<access JWT>`: receives `chat.message`, `chat.typing`, `chat.read`, `chat.presence`, `chat.closed`; sends `{type:'typing'|'read'}`. The portal falls back to polling while the socket is down, and opens the thread linked to an order via `platform_order_id`. Vendors cannot start a thread (customers do). |
+| Shop QR | `GET /vendor/dashboard/api/store/qr/` → `{shop, shop_url, max_codes, codes: [{code, scan_url, qr_svg, table_number, scan_count, last_scanned_at, assigned_at}]}`; `POST` `{table_number?}` mints one more sticker mapped to the shop (max 20, 409 beyond). Codes come from `qrgenration`, so the printed `/qr/r/<code>/` URL is stable and scans are counted. Portal pages `/profile/qr` and `/profile/qr/print` (A4 poster, 4 cards, 8 stickers). |
 | Notifications | No vendor notification feed/mark-read API (only device-token registration). The portal's notification centre is fed by **real** order/booking polling (`orders/poll`, `bookings/poll`) and low-stock data; read state is device-local (gap G-14). |
 | Reports | Built from the endpoints above (dashboard series, orders, POS sales, stock, wallet, withdrawals, bookings). CSV export is generated client-side from fetched data. No server-side report/date-range endpoints (gap G-4). |
 
@@ -204,14 +227,14 @@ Gap G-11: withdrawal creation has **no idempotency key, no balance reservation, 
 | G-3 | No application status lookup | `GET /api/vendor-onboarding/applications/status/?phone=` (OTP-gated) returning `status`, `admin_review_note`, `requested_documents_note` | Medium |
 | G-4 | No date-range analytics | `GET /vendor/dashboard/api/reports/summary/?from=&to=` → revenue, counts, by-category, by-payment-method, top products/services, POS vs online | Medium |
 | G-5 | No returns model | `VendorOrderReturn` + action `return` | Low |
-| G-6 | No vendor-readable delivery tracking | `GET /vendor/dashboard/api/orders/<id>/delivery/` → `{assignment_id, status, partner: {name, phone, vehicle_type}, last_latitude, last_longitude, last_location_at, estimated_delivery_time, pickup, drop}`; optional SSE stream | High |
+| G-6 | ~~No vendor-readable delivery tracking~~ **Mostly resolved** in api-services `a33a7cc` (rider-search state, rider contact, retry/stop). Remaining: live rider coordinates and ETA for vendors. | `last_latitude/longitude`, `estimated_delivery_time` in the `delivery` block | Low |
 | G-7 | Product variants, tax rate, batch/expiry, reserved stock | New fields/models + serializer exposure | Medium |
 | G-8 | **No stock ledger, no locking** | `StockMovement(product, operation, quantity_before, delta, quantity_after, reason, reference, actor, created_at)`; `StockUpdateAPIView` uses `select_for_update` and writes a movement; accept `reason`, `reference`, `movement_type` (`restock|damaged|expired|returned|correction|sale`); `GET /api/v2/vendors/stock/movements/?product=&from=&to=` | **High** |
 | G-9 | **POS checkout not idempotent; online payments auto-marked paid; no tax/discount rules** | Accept `Idempotency-Key` header / `client_reference` (unique per shop) and return the original order on replay; accept `sold_at` for offline sales; for `upi|card` create the order `is_paid=False` until a payment confirmation endpoint/webhook; server-side tax & discount computation; `?source=pos` filter | **High** |
 | G-10 | Booking accept/reject/assign employee; provider CRUD; transition validation | Actions `accept`, `reject`, `assign {provider_id}`; validate transitions; `PATCH/DELETE /api/v2/shops/providers/<id>/`; create provider without pre-existing `user` | High |
 | G-11 | **Withdrawal race / no idempotency / unverified accounts allowed** | `select_for_update` on wallet, reserve amount, `Idempotency-Key`, require `bank_account.is_verified`, expose limits/fees via `GET /api/v2/vendors/withdrawals/config/` | **High** |
 | G-12 | No vendor customer API | `GET /vendor/dashboard/api/customers/` aggregated per customer for this shop only | Medium |
-| G-13 | Chat endpoints broken & unscoped, no realtime | Fix `room_id`→`thread_id`, restrict to participants, vendor-safe serializer, `POST .../read/`, attachments; Django Channels at `/ws/chat/<thread>/` | High |
+| G-13 | ~~Chat endpoints broken & unscoped, no realtime~~ **Resolved** in api-services `a33a7cc` (conversations API, participant checks, read receipts, attachments, Channels WebSocket). Remaining: vendors cannot start a conversation. | Allow vendor-initiated threads for their own orders/bookings | Low |
 | G-14 | No notification feed | `GET /vendor/dashboard/api/notifications/`, `POST .../<id>/read/`, `POST .../read-all/` | Medium |
 
 ## Security findings (backend)
@@ -219,6 +242,6 @@ Gap G-11: withdrawal creation has **no idempotency key, no balance reservation, 
 | ID | Finding | Location |
 |---|---|---|
 | **S-1 (critical)** | `POST /api/vendor-onboarding/send-otp/` is unauthenticated and **returns the OTP** for any phone. OTPs are stored in the shared `OTPRecord` table used by `/api/v2/login/verify-otp`, so anyone can obtain a login OTP for any registered phone and receive a JWT — full account takeover (vendors, customers, riders). `verify_otp` also never consumes the record, so a code is reusable for 5 minutes. | `apps/vendor_onboarding/api_views.py::SendOTPAPIView`, `accounts/services.py::OTPService.verify_otp` |
-| S-2 | Chat message list/send have no participant check. | `api/v2/views.py::MessageListAPI/MessageCreateAPI` |
+| S-2 | ~~Chat message list/send have no participant check.~~ Fixed upstream in `a33a7cc`. | `apps/chat` |
 | S-3 | Several `/api/v2/...` vendor views are not scoped to the requesting vendor (IDOR): `vendors/orders/<pk>/` (GET/PATCH/DELETE), `vendors/orders/<id>/action/`, `vendors/orders/items/`, `vendors/product/<pk>`, `vendors/shop/product/<pk>/`, `vendors/shop/<pk>/`, `vendors/shop/location/<pk>/`, `vendors/shop-documents/*`, `vendors/profile/<pk>/`, `delivery/track/<uuid>/`. The portal uses the scoped `/vendor/dashboard/api/` equivalents and only calls `vendors/orders/<pk>/` (read-only) after the scoped detail confirms ownership. | both backends |
 | S-4 | `delivery/nearby-partners/` returns riders' licence numbers, government-ID images and live coordinates to any authenticated user. | `api/v2/views.py::NearbyDeliveryPartnersAPIView` |

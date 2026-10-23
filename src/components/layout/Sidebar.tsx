@@ -11,7 +11,7 @@ function NavEntry({ item, collapsed, badge, onNavigate }: { item: NavItem; colla
   return (
     <NavLink
       to={item.to}
-      end={item.to === '/wallet'}
+      end={item.to === '/wallet' || item.to === '/profile'}
       onClick={onNavigate}
       title={collapsed ? item.label : undefined}
       className={({ isActive }) =>

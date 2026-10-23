@@ -24,6 +24,7 @@ export const TAGS = [
   'Withdrawals',
   'Chat',
   'PosSales',
+  'ShopQr',
 ] as const;
 
 /** Single RTK Query API; each feature injects its own endpoints (see features/<name>/api.ts). */

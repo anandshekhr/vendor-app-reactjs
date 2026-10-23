@@ -14,9 +14,11 @@ const VerifyOtpPage = page(() => import('@/features/auth/VerifyOtpPage'), 'Verif
 const OnboardingPage = page(() => import('@/features/onboarding/OnboardingPage'), 'OnboardingPage');
 const DashboardPage = page(() => import('@/features/dashboard/DashboardPage'), 'DashboardPage');
 const OrdersPage = page(() => import('@/features/orders/OrdersPage'), 'OrdersPage');
+const InvoicePage = page(() => import('@/features/orders/InvoicePage'), 'InvoicePage');
 const OrderDetailPage = page(() => import('@/features/orders/OrderDetailPage'), 'OrderDetailPage');
 const DeliveriesPage = page(() => import('@/features/delivery/DeliveriesPage'), 'DeliveriesPage');
 const ProductsPage = page(() => import('@/features/products/ProductsPage'), 'ProductsPage');
+const CatalogImportPage = page(() => import('@/features/products/CatalogImportPage'), 'CatalogImportPage');
 const ProductFormPage = page(() => import('@/features/products/ProductFormPage'), 'ProductFormPage');
 const InventoryPage = page(() => import('@/features/inventory/InventoryPage'), 'InventoryPage');
 const MovementsPage = page(() => import('@/features/inventory/MovementsPage'), 'MovementsPage');
@@ -38,6 +40,8 @@ const TransactionsPage = page(() => import('@/features/wallet/TransactionsPage')
 const WithdrawalsPage = page(() => import('@/features/withdrawals/WithdrawalsPage'), 'WithdrawalsPage');
 const WithdrawalDetailPage = page(() => import('@/features/withdrawals/WithdrawalDetailPage'), 'WithdrawalDetailPage');
 const BankAccountsPage = page(() => import('@/features/bank-accounts/BankAccountsPage'), 'BankAccountsPage');
+const QrPage = page(() => import('@/features/profile/QrPage'), 'QrPage');
+const QrPrintPage = page(() => import('@/features/profile/QrPrintPage'), 'QrPrintPage');
 const ProfilePage = page(() => import('@/features/profile/ProfilePage'), 'ProfilePage');
 const DocumentsPage = page(() => import('@/features/profile/DocumentsPage'), 'DocumentsPage');
 const SettingsPage = page(() => import('@/features/profile/SettingsPage'), 'SettingsPage');
@@ -51,6 +55,9 @@ export const routes: RouteObject[] = [
   { path: '/login', element: publicPage(<RedirectIfAuthenticated><LoginPage /></RedirectIfAuthenticated>) },
   { path: '/verify-otp', element: publicPage(<RedirectIfAuthenticated><VerifyOtpPage /></RedirectIfAuthenticated>) },
   { path: '/onboarding', element: publicPage(<OnboardingPage />) },
+  // Full-page printable documents (no app shell).
+  { path: '/orders/:id/invoice', element: publicPage(<RequireAuth>{gated('orders', <InvoicePage />)}</RequireAuth>) },
+  { path: '/profile/qr/print', element: publicPage(<RequireAuth><QrPrintPage /></RequireAuth>) },
   {
     path: '/',
     element: (
@@ -68,6 +75,7 @@ export const routes: RouteObject[] = [
 
       { path: 'products', element: gated('products', <ProductsPage />) },
       { path: 'products/new', element: gated('products', <ProductFormPage />) },
+      { path: 'products/catalog', element: gated('products', <CatalogImportPage />) },
       { path: 'products/:id', element: gated('products', <ProductFormPage />) },
       { path: 'inventory', element: gated('inventory', <InventoryPage />) },
       { path: 'inventory/movements', element: gated('inventory', <MovementsPage />) },
@@ -98,6 +106,7 @@ export const routes: RouteObject[] = [
       { path: 'profile', element: <ProfilePage /> },
       { path: 'profile/business', element: <ProfilePage /> },
       { path: 'profile/documents', element: <DocumentsPage /> },
+      { path: 'profile/qr', element: <QrPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'notifications', element: <NotificationsPage /> },
       { path: 'reports', element: gated('reports', <ReportsPage />) },

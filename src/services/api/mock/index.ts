@@ -145,7 +145,19 @@ on('POST', '/api/v2/vendors/barcode/register/vendor-product/', ({ db, body }) =>
 });
 on('GET', '/api/v2/categories/', ({ db, query }) => [200, paginate(db.categories, query, 100)]);
 on('GET', '/api/v2/units/', ({ db }) => [200, db.units]);
-on('GET', '/vendor/dashboard/api/products/master-catalog/', ({ query }) => [200, paginate([], query)]);
+on('GET', '/vendor/dashboard/api/products/master-catalog/', ({ db, query }) => {
+  const q = (query.get('search') ?? '').toLowerCase();
+  const added = new Set(db.products.map((p) => p.name));
+  const rows = db.masterCatalog
+    .filter((m) => !q || [m.name, m.sku, m.brand_name ?? ''].some((v) => v.toLowerCase().includes(q)))
+    .map((m) => ({ ...m, already_added: m.already_added || added.has(m.name) }));
+  return [200, paginate(rows, query)];
+});
+on('POST', '/vendor/dashboard/api/products/bulk-add/', ({ db, body }) => db.bulkAdd(body));
+on('GET', '/vendor/dashboard/api/store/qr/', ({ db }) => [200, db.qrPayload()]);
+on('POST', '/vendor/dashboard/api/store/qr/', ({ db, body }) => db.createQr(body?.table_number ?? ''));
+on('POST', '/api/v2/vendors/orders/:id/delivery/retry/', ({ db, params }) => db.riderSearch(Number(params.id), 'retry'));
+on('POST', '/api/v2/vendors/orders/:id/delivery/stop/', ({ db, params }) => db.riderSearch(Number(params.id), 'stop'));
 on('GET', '/api/v2/vendors/stock/summary/', ({ db }) => [200, db.stockSummary()]);
 on('GET', '/api/v2/vendors/stock/', ({ db, query }) => {
   const s = (query.get('search') ?? '').toLowerCase();
@@ -224,12 +236,15 @@ on('GET', '/api/v2/vendors/withdrawals/:id/', ({ db, params }) => {
 on('POST', '/api/v2/vendors/withdrawals/', ({ db, body }) => db.createWithdrawal(body));
 
 // ─── Chat ───
-on('GET', '/api/v2/chat/rooms/', ({ db }) => [200, paginate(db.rooms, new URLSearchParams())]);
-on('GET', '/api/v2/chat/rooms/:id/messages/', ({ db, params }) => [200, paginate(db.messages[params.id] ?? [], new URLSearchParams('page_size=100'))]);
-on('POST', '/api/v2/chat/rooms/:id/messages/send/', ({ db, params, body }) => {
-  const m = { id: crypto.randomUUID(), sender: 1, sender_name: 'You', message: body.message, is_read: false, created_at: new Date().toISOString() };
-  (db.messages[params.id] ??= []).push(m);
-  return [201, m];
+on('GET', '/api/v2/chat/conversations/', ({ db, query }) => [200, paginate(db.threadList(), query, 20)]);
+on('GET', '/api/v2/chat/conversations/:key/messages/', ({ db, params, query }) => [200, paginate([...(db.messages[params.key] ?? [])].reverse(), query, 20)]);
+on('POST', '/api/v2/chat/conversations/:key/messages/', ({ db, params, body }) => [201, db.sendMessage(params.key, body instanceof FormData ? String(body.get('text') ?? '') : body.text)]);
+on('POST', '/api/v2/chat/conversations/:key/read/', ({ db, params }) => [200, { message_ids: db.markRead(params.key) }]);
+on('POST', '/api/v2/chat/conversations/:key/close/', ({ db, params }) => {
+  const t = db.threads.find((x) => x.id === params.key);
+  if (!t) return [404, { detail: 'Not found.' }];
+  t.status = 'CLOSED';
+  return [200, t];
 });
 
 // ─── Onboarding ───
@@ -252,7 +267,11 @@ function match(pattern: string, path: string): Record<string, string> | null {
   if (p.length !== a.length) return null;
   const params: Record<string, string> = {};
   for (let i = 0; i < p.length; i++) {
-    if (p[i].startsWith(':')) params[p[i].slice(1)] = decodeURIComponent(a[i]);
+    if (p[i].startsWith(':')) {
+      // `:id` mirrors Django's <int:pk>; `:key` accepts any segment (uuids, codes).
+      if (p[i] === ':id' && !/^\d+$/.test(a[i])) return null;
+      params[p[i].slice(1)] = decodeURIComponent(a[i]);
+    }
     else if (p[i] !== a[i]) return null;
   }
   return params;

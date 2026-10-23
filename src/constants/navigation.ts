@@ -19,6 +19,7 @@ import {
   Wallet,
   Wrench,
   ArrowDownToLine,
+  QrCode,
   type LucideIcon,
 } from 'lucide-react';
 import type { Capability } from '@/features/auth/capabilities';
@@ -86,6 +87,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Business',
     items: [
       { label: 'Business profile', to: '/profile', icon: Store, capability: 'profile' },
+      { label: 'Shop QR code', to: '/profile/qr', icon: QrCode, capability: 'profile' },
       { label: 'Notifications', to: '/notifications', icon: Bell, capability: 'notifications', badgeKey: 'notifications' },
       { label: 'Settings', to: '/settings', icon: Settings, capability: 'profile' },
     ],
