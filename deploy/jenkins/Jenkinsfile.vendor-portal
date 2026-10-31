@@ -37,7 +37,13 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                script {
+                    def scmVars = checkout scm
+                    // Multibranch jobs set BRANCH_NAME; plain Pipeline jobs only report the checked-out ref
+                    // (e.g. origin/develop), so derive the branch from that too.
+                    env.DEPLOY_BRANCH = env.BRANCH_NAME ?: (scmVars.GIT_BRANCH ?: '').replaceFirst(/^(refs\/heads\/|origin\/)/, '')
+                    echo "Deploying branch '${env.DEPLOY_BRANCH}' at ${scmVars.GIT_COMMIT ?: 'unknown commit'}"
+                }
             }
         }
 
@@ -46,8 +52,8 @@ pipeline {
                 script {
                     env.TARGET_ENV = params.ENVIRONMENT
                     if (env.TARGET_ENV == 'production') {
-                        if (env.BRANCH_NAME && env.BRANCH_NAME != 'main') {
-                            error("Production deploys must run from main (this build is on '${env.BRANCH_NAME}').")
+                        if (env.DEPLOY_BRANCH != 'main') {
+                            error("Production deploys must run from main (this build is on '${env.DEPLOY_BRANCH ?: 'an unknown branch'}').")
                         }
                         if (!params.DEPLOY_VERSION?.trim()) {
                             error('DEPLOY_VERSION is required for production (e.g. v1.4.2).')

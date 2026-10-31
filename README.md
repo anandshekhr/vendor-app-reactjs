@@ -115,7 +115,8 @@ vendor.thenearbyshop.com to `vendor-portal:8080`.
 ### Jenkins setup (once)
 
 Create a **Multibranch Pipeline** (or Pipeline) job for this repository with script path
-`deploy/jenkins/Jenkinsfile.vendor-portal`, on the same Jenkins/Docker host as the api-services jobs. The agent needs
+`deploy/jenkins/Jenkinsfile.vendor-portal`, on the same Jenkins/Docker host as the api-services jobs. Like
+api-services, `develop` is the branch deployed to staging; production deploys refuse anything but `main`. The agent needs
 the Docker CLI with Compose v2 and access to the host's Docker daemon (like the other deploy jobs).
 
 **Build with Parameters**: `ENVIRONMENT` (staging/production), optional `DEPLOY_VERSION` (SemVer; required for
