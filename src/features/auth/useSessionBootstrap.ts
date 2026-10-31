@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { profileApi } from '@/features/profile/api';
+import { printingApi } from '@/features/printing/api';
 import { useAppDispatch, useAppSelector } from '@/hooks/store';
 import { isApiError } from '@/services/api/errors';
 import { businessLoaded, offlineSessionResumed, signedOut } from './authSlice';
@@ -21,8 +22,14 @@ export function useSessionBootstrap() {
     (async () => {
       const shopReq = dispatch(profileApi.endpoints.getShopProfile.initiate(undefined, { forceRefetch: true }));
       const meReq = dispatch(profileApi.endpoints.getMe.initiate(undefined, { forceRefetch: true }));
+      // Only print shops have print settings (403 otherwise). Never blocks sign-in.
+      const printReq = dispatch(printingApi.endpoints.getPrintSettings.initiate(undefined, { forceRefetch: true }));
       try {
         const [shop, me] = await Promise.all([shopReq.unwrap(), meReq.unwrap()]);
+        const isPrintShop = await printReq.unwrap().then(
+          () => true,
+          (err) => (isApiError(err) && err.isNetworkError ? Boolean(cached?.isPrintShop) : false),
+        );
         if (cancelled) return;
         const type = businessTypeFromShop(shop);
         const loc = me.shop?.location;
@@ -39,6 +46,7 @@ export function useSessionBootstrap() {
             isVerified: Boolean(me.is_verified),
             latitude: loc?.latitude != null ? Number(loc.latitude) : null,
             longitude: loc?.longitude != null ? Number(loc.longitude) : null,
+            isPrintShop,
             cachedAt: Date.now(),
           }),
         );
@@ -58,6 +66,7 @@ export function useSessionBootstrap() {
       } finally {
         shopReq.unsubscribe();
         meReq.unsubscribe();
+        printReq.unsubscribe();
       }
     })();
     return () => {

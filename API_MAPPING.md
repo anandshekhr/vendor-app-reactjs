@@ -232,6 +232,27 @@ Gap G-11: withdrawal creation has **no idempotency key, no balance reservation, 
 
 ---
 
+## 13. Printing & photocopy orders (print shops)
+
+Shown when `GET /api/v1/print-shop/vendor/settings/` succeeds (the shop has a print-shop profile; 403 otherwise), for
+any business type. Needs the **`claude/printing-orders`** branch of api-services (`b8f0df8`, 26 tests); the app's own
+README is `src/apps/print_shop/README.md` there.
+
+| Feature | Method & path (`/api/v1/print-shop/vendor/…`) | Notes |
+|---|---|---|
+| Queue | `GET orders/?bucket=new\|quotes\|in_progress\|ready\|out\|done\|closed&fulfilment_type=DELIVERY\|PICKUP&q=&page=` | Drafts and unpaid online orders are never listed |
+| Counts / nav badge | `GET orders/summary/` | Badge = new + quotes waiting + deliveries needing a partner again |
+| Detail | `GET orders/<uuid>/` | `fulfilment_type`, `delivery` (state, rider, `can_request`), `pickup` (attempts, lock, expiry — **never the code**), files, print jobs, quotations, history, **`allowed_actions`** (the portal only offers these) |
+| Decide | `POST orders/<id>/accept/`, `reject/ {reason}`, `quote/ {quoted_amount, details, estimated_completion_minutes}`, `request-clarification/ {message}`, `cancel/ {reason}` | Paid orders cancelled/rejected are refunded in full |
+| Work | `POST orders/<id>/status/ {status: PRINTING\|QUALITY_CHECK}`, `ready/`, `jobs/<id>/printed\|failed\|reprint/` | `ready` → ready for pickup (code issued) or ready for delivery (partner requested). Reprints need a reason and are audited |
+| Pickup | `POST orders/<id>/verify-pickup/ {code \| qr_payload}`, `POST orders/verify-pickup/` (counter mode), `hand-over/ {cash_collected}` | 6-digit code or QR `TNBS-PRINT:<id>:<code>`; locked after 5 wrong tries; hand-over only after verification, and only with cash confirmed for cash orders |
+| Delivery | `POST orders/<id>/request-delivery/` | Only after a cancelled/failed delivery; status after that comes from the delivery partner |
+| Documents | `POST orders/<id>/files/<id>/link/ {disposition}` | Signed, 5-minute, user-bound URL; previews open in a sandboxed iframe; every open is logged |
+| Settings & prices | `GET\|PATCH settings/`, `GET\|POST\|PATCH\|DELETE rate-cards/` | Pickup/delivery/cash/auto-accept, radius, turnaround, per-page prices |
+
+Customer checkout (choosing delivery or pickup, pickup code/QR, tracking) is in the customer app, not this portal; the
+API for it is listed in the api-services README.
+
 ## BACKEND_GAPS — required changes
 
 | ID | Gap | Required change (suggested contract) | Priority |

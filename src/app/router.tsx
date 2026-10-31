@@ -41,6 +41,9 @@ const TransactionsPage = page(() => import('@/features/wallet/TransactionsPage')
 const WithdrawalsPage = page(() => import('@/features/withdrawals/WithdrawalsPage'), 'WithdrawalsPage');
 const WithdrawalDetailPage = page(() => import('@/features/withdrawals/WithdrawalDetailPage'), 'WithdrawalDetailPage');
 const BankAccountsPage = page(() => import('@/features/bank-accounts/BankAccountsPage'), 'BankAccountsPage');
+const PrintingOrdersPage = page(() => import('@/features/printing/PrintingOrdersPage'), 'PrintingOrdersPage');
+const PrintingOrderDetailPage = page(() => import('@/features/printing/PrintingOrderDetailPage'), 'PrintingOrderDetailPage');
+const PrintingSettingsPage = page(() => import('@/features/printing/PrintingSettingsPage'), 'PrintingSettingsPage');
 const QrPage = page(() => import('@/features/profile/QrPage'), 'QrPage');
 const QrPrintPage = page(() => import('@/features/profile/QrPrintPage'), 'QrPrintPage');
 const ProfilePage = page(() => import('@/features/profile/ProfilePage'), 'ProfilePage');
@@ -74,6 +77,9 @@ export const routes: RouteObject[] = [
       { path: 'orders', element: gated('orders', <OrdersPage />) },
       { path: 'orders/:id', element: gated('orders', <OrderDetailPage />) },
       { path: 'deliveries', element: gated('delivery', <DeliveriesPage />) },
+      { path: 'printing', element: gated('printing', <PrintingOrdersPage />) },
+      { path: 'printing/settings', element: gated('printing', <PrintingSettingsPage />) },
+      { path: 'printing/:id', element: gated('printing', <PrintingOrderDetailPage />) },
 
       { path: 'products', element: gated('products', <ProductsPage />) },
       { path: 'products/new', element: gated('products', <ProductFormPage />) },

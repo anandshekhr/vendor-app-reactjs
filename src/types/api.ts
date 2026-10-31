@@ -741,3 +741,224 @@ export interface ShopQrResponse {
   max_codes: number;
   codes: ShopQrCode[];
 }
+
+// ─── Printing & photocopy orders (/api/v1/print-shop/) ──────────────────────
+
+export type PrintFulfilmentType = 'DELIVERY' | 'PICKUP';
+export type PrintPaymentMethod = 'ONLINE' | 'COD';
+export type PrintOrderStatus =
+  | 'CREATED'
+  | 'QUOTATION_PENDING'
+  | 'AWAITING_APPROVAL'
+  | 'PAYMENT_PENDING'
+  | 'NEW_REQUEST'
+  | 'RECEIVED'
+  | 'PRINTING'
+  | 'QUALITY_CHECK'
+  | 'READY_FOR_PICKUP'
+  | 'PICKUP_VERIFIED'
+  | 'READY_FOR_DELIVERY'
+  | 'PARTNER_ASSIGNED'
+  | 'PICKED_UP'
+  | 'OUT_FOR_DELIVERY'
+  | 'DELIVERED'
+  | 'COMPLETED'
+  | 'REJECTED'
+  | 'CANCELLED';
+
+export type PrintVendorAction =
+  | 'accept'
+  | 'reject'
+  | 'quote'
+  | 'revise_quote'
+  | 'start_printing'
+  | 'quality_check'
+  | 'mark_ready'
+  | 'back_to_printing'
+  | 'request_delivery'
+  | 'verify_pickup'
+  | 'hand_over'
+  | 'cancel'
+  | 'request_clarification';
+
+export type PrintDeliveryState = 'not_requested' | 'searching' | 'not_found' | 'assigned' | 'picked_up' | 'delivered' | 'cancelled' | 'error';
+
+export interface PrintOrderListItem {
+  id: string;
+  order_number: string;
+  status: PrintOrderStatus;
+  status_display: string;
+  fulfilment_type: PrintFulfilmentType;
+  fulfilment_type_display: string;
+  payment_method: PrintPaymentMethod;
+  payment_status: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+  total_pages: number;
+  total_amount: Decimal;
+  quotation_required: boolean;
+  customer_name: string;
+  file_count: number;
+  delivery_state: PrintDeliveryState | null;
+  created_at: ISODateTime;
+  ready_at: ISODateTime | null;
+}
+
+export interface PrintOrderFile {
+  id: number;
+  original_filename: string;
+  file_type: string;
+  mime_type: string;
+  file_size: number;
+  copies: number;
+  color_mode: 'BW' | 'COLOR';
+  paper_size: string;
+  sided: 'SINGLE' | 'DOUBLE';
+  binding: string;
+  page_range: string;
+  special_instructions: string;
+  total_pages: number | null;
+  page_count_status: string;
+  computed_price: Decimal;
+  previewable: boolean;
+  is_deleted: boolean;
+}
+
+export interface PrintOrderHistoryEntry {
+  from_status: string | null;
+  to_status: string;
+  to_status_display: string;
+  note: string;
+  is_override: boolean;
+  created_at: ISODateTime;
+}
+
+export interface PrintQuotation {
+  id: number;
+  quoted_amount: Decimal;
+  details: string;
+  estimated_completion_minutes: number | null;
+  status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'SUPERSEDED';
+  created_at: ISODateTime;
+  responded_at: ISODateTime | null;
+}
+
+export interface PrintJob {
+  id: number;
+  file_id: number;
+  file_name: string;
+  status: 'QUEUED' | 'PRINTING' | 'PRINTED' | 'FAILED';
+  printer_name: string;
+  retry_count: number;
+  last_error: string;
+  printed_at: ISODateTime | null;
+}
+
+export interface PrintDeliveryBlock {
+  state: PrintDeliveryState;
+  platform_status: string | null;
+  delivery_order_id: string | null;
+  rider: { name: string; phone: string; vehicle_type: string } | null;
+  can_request: boolean;
+  attempts: number;
+  fee: Decimal;
+  distance_km: Decimal | null;
+  eta_minutes: number | null;
+}
+
+export interface PrintPickupBlock {
+  waiting: boolean;
+  code_expires_at: ISODateTime | null;
+  failed_attempts: number;
+  locked: boolean;
+  verified_at: ISODateTime | null;
+  picked_up_at: ISODateTime | null;
+}
+
+export interface PrintOrderDetail extends Omit<PrintOrderListItem, 'customer_name' | 'file_count' | 'delivery_state'> {
+  print_shop_name: string;
+  payment_method_display: string;
+  is_delivery: boolean;
+  delivery_address_detail: {
+    id: number;
+    name: string | null;
+    address_line: string;
+    city: string;
+    state: string | null;
+    zip_code: string;
+    phone_number: string;
+    latitude: Decimal | null;
+    longitude: Decimal | null;
+  } | null;
+  subtotal_amount: Decimal;
+  delivery_fee: Decimal;
+  quoted_amount: Decimal | null;
+  quotation: PrintQuotation | null;
+  quotations: PrintQuotation[];
+  clarification_request: string;
+  clarification_requested_at: ISODateTime | null;
+  special_instructions: string;
+  accepted_at: ISODateTime | null;
+  pickup_verified_at: ISODateTime | null;
+  picked_up_at: ISODateTime | null;
+  delivered_at: ISODateTime | null;
+  completed_at: ISODateTime | null;
+  cancelled_at: ISODateTime | null;
+  cancellation_reason: string;
+  rejected_at: ISODateTime | null;
+  rejection_reason: string;
+  refund_status: 'NONE' | 'PENDING' | 'PROCESSED' | 'FAILED';
+  refund_amount: Decimal;
+  delivery: PrintDeliveryBlock | null;
+  pickup: PrintPickupBlock | null;
+  customer: { name: string; phone: string };
+  files: PrintOrderFile[];
+  print_jobs: PrintJob[];
+  history: PrintOrderHistoryEntry[];
+  allowed_actions: PrintVendorAction[];
+}
+
+export interface PrintOrderSummary {
+  new: number;
+  quotes: number;
+  in_progress: number;
+  ready: number;
+  out: number;
+  done: number;
+  closed: number;
+  awaiting_pickup: number;
+  delivery_attention: number;
+}
+
+export interface PrintShopSettings {
+  id: number;
+  shop_name: string;
+  is_accepting_orders: boolean;
+  auto_accept_orders: boolean;
+  supports_pickup: boolean;
+  supports_delivery: boolean;
+  accepts_cash: boolean;
+  pickup_instructions: string;
+  service_radius_km: number;
+  turnaround_minutes_min: number;
+  turnaround_minutes_max: number;
+  max_files_per_order: number;
+  max_file_size_mb: number;
+}
+
+export interface PrintRateCard {
+  id: number;
+  color_mode: 'BW' | 'COLOR';
+  paper_size: 'A4' | 'A3' | 'A5' | 'LEGAL' | 'LETTER';
+  sided: 'SINGLE' | 'DOUBLE';
+  binding: 'NONE' | 'STAPLED' | 'SPIRAL' | 'HARDBOUND';
+  price_per_page: Decimal;
+  binding_fee: Decimal;
+  is_active: boolean;
+  created_at?: ISODateTime;
+}
+
+export interface PrintDocumentLink {
+  url: string;
+  disposition: 'inline' | 'attachment';
+  expires_at: ISODateTime;
+  previewable: boolean;
+}

@@ -19,7 +19,9 @@ export type Capability =
   | 'wallet'
   | 'reports'
   | 'notifications'
-  | 'profile';
+  | 'profile'
+  /** Printing & photocopy orders: the shop has a print-shop profile (any business type). */
+  | 'printing';
 
 const COMMON: Capability[] = ['dashboard', 'customers', 'chat', 'wallet', 'reports', 'notifications', 'profile'];
 const PRODUCT: Capability[] = ['products', 'inventory', 'scanner', 'pos', 'orders', 'delivery'];

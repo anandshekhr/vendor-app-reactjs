@@ -305,6 +305,22 @@ on('PUT', '/api/vendor-onboarding/applications/:id/products/', ({ db, params, bo
   return [200, app];
 });
 
+// ─── Printing orders ───
+const PS = '/api/v1/print-shop/vendor';
+on('GET', `${PS}/settings/`, ({ db }) => db.printing.settings());
+on('PATCH', `${PS}/settings/`, ({ db, body }) => db.printing.updateSettings(body));
+on('GET', `${PS}/rate-cards/`, ({ db }) => db.printing.rateCards());
+on('POST', `${PS}/rate-cards/`, ({ db, body }) => db.printing.saveRateCard(body));
+on('PATCH', `${PS}/rate-cards/:id/`, ({ db, body, params }) => db.printing.saveRateCard(body, Number(params.id)));
+on('DELETE', `${PS}/rate-cards/:id/`, ({ db, params }) => db.printing.deleteRateCard(Number(params.id)));
+on('GET', `${PS}/orders/summary/`, ({ db }) => db.printing.summary());
+on('POST', `${PS}/orders/verify-pickup/`, ({ db, body }) => db.printing.verifyAny(body ?? {}));
+on('GET', `${PS}/orders/`, ({ db, query }) => [200, paginate(db.printing.list(query), query, 20)]);
+on('GET', `${PS}/orders/:key/`, ({ db, params }) => db.printing.detail(params.key));
+on('POST', `${PS}/orders/:key/jobs/:id/:jobAction/`, ({ db, params, body }) => db.printing.jobAction(params.key, Number(params.id), params.jobAction, body ?? {}));
+on('POST', `${PS}/orders/:key/files/:id/link/`, ({ db, params, body }) => db.printing.link(params.key, Number(params.id), body?.disposition ?? 'inline'));
+on('POST', `${PS}/orders/:key/:action/`, ({ db, params, body }) => db.printing.act(params.key, params.action, body ?? {}));
+
 function fakeJwt() {
   const payload = btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600, user_id: 1 })).replace(/=+$/, '');
   return `eyJhbGciOiJub25lIn0.${payload}.mock`;

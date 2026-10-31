@@ -20,6 +20,7 @@ import {
   Wrench,
   ArrowDownToLine,
   QrCode,
+  Printer,
   type LucideIcon,
 } from 'lucide-react';
 import type { Capability } from '@/features/auth/capabilities';
@@ -29,7 +30,7 @@ export interface NavItem {
   to: string;
   icon: LucideIcon;
   capability: Capability;
-  badgeKey?: 'orders' | 'bookings' | 'chat' | 'notifications' | 'offlineSales';
+  badgeKey?: 'orders' | 'bookings' | 'chat' | 'notifications' | 'offlineSales' | 'printing';
 }
 
 export interface NavGroup {
@@ -48,6 +49,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Point of Sale', to: '/pos', icon: ShoppingCart, capability: 'pos', badgeKey: 'offlineSales' },
       { label: 'Orders', to: '/orders', icon: ClipboardList, capability: 'orders', badgeKey: 'orders' },
       { label: 'Deliveries', to: '/deliveries', icon: Truck, capability: 'delivery' },
+      { label: 'Printing orders', to: '/printing', icon: Printer, capability: 'printing', badgeKey: 'printing' },
     ],
   },
   {

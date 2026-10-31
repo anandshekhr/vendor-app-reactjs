@@ -218,3 +218,77 @@ test('self-registration: apply, pick 5 starter products, then check status', asy
   await expect(page.getByText('Starter products (6)')).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('printing: pickup order verified by OTP and handed over', async ({ page }) => {
+  const errors = await login(page);
+  await openNav(page);
+  await page.getByRole('navigation', { name: 'Main navigation' }).last().getByRole('link', { name: /Printing orders/ }).click();
+  await expect(page.getByRole('heading', { name: 'Printing orders' })).toBeVisible();
+  await expect(page.getByText('PRT-RIDER-ASSIGNED')).toBeVisible();
+  await expect(page.locator('tr', { hasText: 'PRT-RIDER-ASSIGNED' }).getByText('Home delivery')).toBeVisible();
+  await expect(page.locator('tr', { hasText: 'PRT-VERIFY-ME' }).getByText('Self pickup')).toBeVisible();
+
+  await page.getByText('PRT-VERIFY-ME').click();
+  await expect(page.getByRole('heading', { name: /PRT-VERIFY-ME/ })).toBeVisible();
+  await expect(page.getByText('Waiting for the customer')).toBeVisible();
+  // Can't hand over before verification: there is no such button yet
+  await expect(page.getByRole('button', { name: 'Documents handed over' })).toHaveCount(0);
+
+  await page.getByLabel('Pickup code').fill('000000');
+  await page.getByRole('button', { name: 'Verify', exact: true }).click();
+  await expect(page.getByText('Wrong pickup code. 4 attempt(s) left.')).toBeVisible();
+  await page.getByLabel('Pickup code').fill('135790');
+  await page.getByRole('button', { name: 'Verify', exact: true }).click();
+  await expect(page.getByText(/Code verified/)).toBeVisible();
+
+  // Cash order: the cash confirmation is required
+  const handOver = page.getByRole('button', { name: 'Documents handed over' });
+  await expect(handOver).toBeDisabled();
+  await page.getByRole('checkbox', { name: /I collected/ }).check();
+  await handOver.click();
+  await expect(page.getByText(/Picked up/).first()).toBeVisible();
+  await expect(page.getByText('Completed', { exact: true }).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('printing: counter verification, delivery order with rider, and ready for delivery', async ({ page }) => {
+  await login(page);
+  await page.goto('/printing');
+  await page.getByRole('button', { name: 'Verify pickup' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Pickup code').fill('246810');
+  await dialog.getByRole('button', { name: 'Verify', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /PRT-READY-PICKUP/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Documents handed over' })).toBeEnabled();
+
+  await page.goto('/printing');
+  await page.getByText('PRT-RIDER-ASSIGNED').click();
+  await expect(page.getByText('Ravi Kumar')).toBeVisible();
+  await expect(page.getByText('Partner assigned').first()).toBeVisible();
+  await expect(page.getByText('44 Sarabha Nagar', { exact: false })).toBeVisible();
+
+  await page.goto('/printing');
+  await page.getByText('PRT-QC-DELIVERY').click();
+  await page.getByRole('button', { name: 'Ready for delivery' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Request delivery partner' }).click();
+  await expect(page.getByText('Finding a partner')).toBeVisible();
+});
+
+test('printing: quotation and per-page prices', async ({ page }) => {
+  await login(page);
+  await page.goto('/printing?bucket=quotes');
+  await page.getByText('PRT-NEEDS-QUOTE').click();
+  await page.getByLabel('Printing amount (₹)').fill('180');
+  await page.getByLabel('Ready in (minutes)').fill('90');
+  await page.getByRole('button', { name: 'Send quotation' }).click();
+  await expect(page.getByText('Waiting for customer')).toBeVisible();
+
+  await page.goto('/printing/settings');
+  await expect(page.getByRole('list', { name: 'Per-page prices' }).getByText('₹2.00/page')).toBeVisible();
+  await page.getByRole('button', { name: 'Add price' }).click();
+  await page.getByRole('dialog').getByLabel('Print').selectOption('BW');
+  await page.getByRole('dialog').getByLabel('Sides').selectOption('DOUBLE');
+  await page.getByRole('dialog').getByLabel('Price per page (₹)').fill('3');
+  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('₹3.00/page')).toBeVisible();
+});

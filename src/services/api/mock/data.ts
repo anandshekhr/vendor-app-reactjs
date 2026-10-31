@@ -21,6 +21,7 @@ import type {
   WalletTransaction,
   Withdrawal,
 } from '@/types/api';
+import { createPrintingMock } from './printing';
 
 type Product = ProductDetail & { barcode: string | null; barcode_type: string | null; category_name: string | null };
 type Booking = BookingListItem & { end_time: string; created_at: string };
@@ -335,6 +336,7 @@ export function createMockDb() {
     get balance() {
       return balance;
     },
+    printing: createPrintingMock(),
     onboardingCategories: [
       { id: 10, name: 'Grocery', parent_category: null, category_type: 'product', children: [{ id: 11, name: 'Dairy', parent_category: 10, category_type: 'product', children: [] }] },
       { id: 20, name: 'Salon', parent_category: null, category_type: 'service', children: [] },

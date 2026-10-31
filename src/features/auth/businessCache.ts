@@ -15,6 +15,8 @@ export interface BusinessSnapshot {
   isVerified: boolean;
   latitude: number | null;
   longitude: number | null;
+  /** The shop takes printing & photocopy orders (has a print-shop profile on the API). */
+  isPrintShop?: boolean;
   cachedAt: number;
 }
 

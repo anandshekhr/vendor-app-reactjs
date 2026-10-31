@@ -2,6 +2,10 @@ import { createApi } from '@reduxjs/toolkit/query/react';
 import { axiosBaseQuery } from './baseQuery';
 
 export const TAGS = [
+  'PrintOrder',
+  'PrintOrders',
+  'PrintSettings',
+  'PrintRateCards',
   'Me',
   'Shop',
   'StoreHours',

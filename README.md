@@ -10,8 +10,8 @@ All endpoints are served by **api-services**. A few features (full order detail 
 import with price/stock, shop QR codes, delivery state on the scoped order endpoints, starter products and status
 lookup for self-registration) need the
 `claude/vendor-portal-api` branch of api-services; the portal degrades gracefully without it. See
-[API_MAPPING.md → Required api-services version](API_MAPPING.md#required-api-services-version). Live chat needs the
-api-services `websocket` (Daphne) service reachable at `/ws/`.
+[API_MAPPING.md → Required api-services version](API_MAPPING.md#required-api-services-version). Printing orders need the
+`claude/printing-orders` branch. Live chat needs the api-services `websocket` (Daphne) service reachable at `/ws/`.
 
 ## Documentation
 
@@ -39,6 +39,7 @@ api-services `websocket` (Daphne) service reachable at `/ws/`.
 | Chat | Inbox with unread counts, order-linked threads, **real-time over WebSocket** (typing, read receipts) with polling fallback, image/PDF attachments, failed-message retry, close conversation | Vendors can't start a thread (customers do) |
 | Finance | Wallet balances, transactions, bank accounts (masked, with verification status), withdrawal flow with review and reference ID | Idempotency and balance reservation (G-11) |
 | Profile | Storefront, logo/banner, opening hours, accepting-orders toggle, GSTIN/PAN/registration, KYC status, **shop QR codes** (per counter/table) with A4 poster, 4-card and sticker print layouts | Address and map editing (S-3), holidays and coverage (G-2) |
+| Printing orders | For print shops: queue by stage with **home delivery / self pickup** shown on every order, accept/reject, quotations, secure document preview/download, per-file print jobs and reprints, **pickup OTP and QR verification** (per order or at the counter, camera or handheld scanner), cash handover, **delivery partner request and live rider status**, prices & settings | Automatic printing to a printer, Office-file previews |
 | Reports | Sales, stock, bookings and payouts, with CSV export | Date-range reports (G-4) |
 | Notifications | In-app feed for new orders and bookings, low stock and sync problems | Push and server-side feed (G-14) |
 
