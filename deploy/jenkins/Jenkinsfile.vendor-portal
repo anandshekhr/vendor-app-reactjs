@@ -1,0 +1,188 @@
+// Vendor portal (this repo) -> vendor.thenearbyshop.com, replacing tnbs-vendor-service.
+//
+// Same shape as api-services' Jenkinsfile.portal and tnbs-vendor-service's Jenkinsfile.vendor: the
+// agent talks to the HOST's Docker daemon over docker.sock and the container joins the shared
+// `webnet` network, where the edge nginx (api-services edge-stack) reaches it as vendor-portal:8080.
+// Nothing here touches the edge: pointing the domain at this container is the api-services edge
+// job's change (deploy/nginx/api-stage.conf).
+pipeline {
+    agent {
+        node {
+            label ''
+            // Own, stable checkout path (never shared with another repo's pipeline).
+            customWorkspace '/root/vendor-portal'
+        }
+    }
+
+    options {
+        disableConcurrentBuilds()
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['staging', 'production'],
+            description: 'Staging builds against staging-api.thenearbyshop.com; production against api.thenearbyshop.com and must run from main with a release version and a manual confirmation.')
+        string(name: 'DEPLOY_VERSION', defaultValue: '',
+            description: 'SemVer, e.g. v1.4.2 or v1.4.2-rc.1. Blank = VERSION file + build metadata. Required (clean MAJOR.MINOR.PATCH) for production.')
+        booleanParam(name: 'RUN_TESTS', defaultValue: true,
+            description: 'Typecheck and unit tests (inside Docker) before deploying.')
+        booleanParam(name: 'RUN_SMOKE_TEST', defaultValue: true,
+            description: 'After deploying, check https://vendor.thenearbyshop.com serves this build.')
+    }
+
+    environment {
+        PUBLIC_URL = 'https://vendor.thenearbyshop.com'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Determine environment') {
+            steps {
+                script {
+                    env.TARGET_ENV = params.ENVIRONMENT
+                    if (env.TARGET_ENV == 'production') {
+                        if (env.BRANCH_NAME && env.BRANCH_NAME != 'main') {
+                            error("Production deploys must run from main (this build is on '${env.BRANCH_NAME}').")
+                        }
+                        if (!params.DEPLOY_VERSION?.trim()) {
+                            error('DEPLOY_VERSION is required for production (e.g. v1.4.2).')
+                        }
+                        env.COMPOSE_FILE = 'deploy/compose/vendor-portal-stack.prod.yml'
+                        env.SERVICE = 'vendor-portal-prod'
+                        env.CONTAINER = 'vendor_portal_prod'
+                        env.EXPECTED_API = 'https://api.thenearbyshop.com'
+                    } else {
+                        env.COMPOSE_FILE = 'deploy/compose/vendor-portal-stack.yml'
+                        env.SERVICE = 'vendor-portal'
+                        env.CONTAINER = 'vendor_portal'
+                        env.EXPECTED_API = 'https://staging-api.thenearbyshop.com'
+                    }
+                }
+            }
+        }
+
+        stage('Resolve version') {
+            steps {
+                script {
+                    def releasePattern = /^v?\d+\.\d+\.\d+$/
+                    def fullSemverPattern = /^v?\d+\.\d+\.\d+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$/
+                    if (params.DEPLOY_VERSION?.trim()) {
+                        def requested = params.DEPLOY_VERSION.trim()
+                        if (!(requested ==~ fullSemverPattern)) {
+                            error("DEPLOY_VERSION '${requested}' is not valid SemVer (e.g. v1.4.2 or v1.4.2-rc.1).")
+                        }
+                        if (env.TARGET_ENV == 'production' && !(requested ==~ releasePattern)) {
+                            error("Production requires a clean MAJOR.MINOR.PATCH version, got '${requested}'.")
+                        }
+                        env.APP_VERSION = requested
+                    } else {
+                        def baseVersion = readFile('VERSION').trim()
+                        def shortSha = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                        env.APP_VERSION = "${baseVersion}+build.${env.BUILD_NUMBER}.${shortSha}"
+                    }
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${env.APP_VERSION}"
+                    currentBuild.description = "${env.APP_VERSION} -> ${env.TARGET_ENV} (vendor portal)"
+                }
+            }
+        }
+
+        stage('Require infrastructure') {
+            steps {
+                sh '''
+                    if ! docker network inspect webnet >/dev/null 2>&1; then
+                        echo "Docker network webnet does not exist. Deploy api-services' edge stack (Jenkinsfile.edge) first." >&2
+                        exit 1
+                    fi
+                '''
+            }
+        }
+
+        stage('Test') {
+            when { expression { params.RUN_TESTS } }
+            steps {
+                sh 'docker build --target test -t tnbs-vendor-portal:test-$BUILD_NUMBER .'
+            }
+            post {
+                always { sh 'docker image rm -f tnbs-vendor-portal:test-$BUILD_NUMBER >/dev/null 2>&1 || true' }
+            }
+        }
+
+        stage('Confirm production deploy') {
+            when { expression { env.TARGET_ENV == 'production' } }
+            steps {
+                input message: "Deploy vendor portal ${env.APP_VERSION} (${env.GIT_COMMIT ?: 'unknown commit'}) to production?", ok: 'Deploy'
+            }
+        }
+
+        stage('Build & Deploy') {
+            steps {
+                sh 'APP_VERSION="$APP_VERSION" docker compose -f "$COMPOSE_FILE" up -d --build --force-recreate "$SERVICE"'
+            }
+        }
+
+        stage('Wait until healthy') {
+            steps {
+                sh '''
+                    for i in $(seq 1 30); do
+                        status=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER" 2>/dev/null || echo starting)
+                        echo "vendor portal health: $status"
+                        [ "$status" = "healthy" ] && break
+                        [ "$i" = 30 ] && { echo "vendor portal never became healthy" >&2; exit 1; }
+                        sleep 5
+                    done
+                    # The container serves exactly this build, against the right API.
+                    served=$(docker exec "$CONTAINER" wget -qO- http://127.0.0.1:8080/version.json)
+                    echo "container serves: $served"
+                    echo "$served" | grep -qF "\\"version\\":\\"$APP_VERSION\\"" || { echo "Container is not serving $APP_VERSION" >&2; exit 1; }
+                    echo "$served" | grep -qF "\\"api\\":\\"$EXPECTED_API\\"" || { echo "Container was built against the wrong API (expected $EXPECTED_API)" >&2; exit 1; }
+                '''
+            }
+        }
+
+        stage('Smoke test') {
+            when { expression { params.RUN_SMOKE_TEST } }
+            steps {
+                script {
+                    // Public check through the edge. Only staging is routed today (see the prod compose file),
+                    // and the edge must already point at this container -- if it still points at
+                    // tnbs-vendor-service the build is marked UNSTABLE rather than failed, so the portal can
+                    // be deployed before the edge switch.
+                    if (env.TARGET_ENV != 'staging') {
+                        echo 'Production is not routed through vendor.thenearbyshop.com yet; skipping the public check.'
+                        return
+                    }
+                    def served = sh(script: 'curl -fsS --max-time 15 "$PUBLIC_URL/version.json?b=$BUILD_NUMBER" || true', returnStdout: true).trim()
+                    echo "${env.PUBLIC_URL} serves: ${served ?: '(nothing)'}"
+                    if (!served.contains("\"version\":\"${env.APP_VERSION}\"")) {
+                        unstable("${env.PUBLIC_URL} is not serving this build yet. Run api-services' edge job so vendor.thenearbyshop.com points at vendor-portal:8080.")
+                        return
+                    }
+                    sh '''
+                        for path in / /login /dashboard /orders/1; do
+                            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$PUBLIC_URL$path")
+                            echo "$path -> $code"
+                            [ "$code" = 200 ] || { echo "$PUBLIC_URL$path returned $code" >&2; exit 1; }
+                        done
+                        code=$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 15 "$PUBLIC_URL/vendors/login/")
+                        echo "/vendors/login/ -> $code"
+                        echo "$code" | grep -q '^301 .*/login$' || { echo "Legacy /vendors/login/ redirect is broken" >&2; exit 1; }
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            sh 'docker compose -f "$COMPOSE_FILE" logs --tail 100 "$SERVICE" || true'
+        }
+        always {
+            sh 'docker compose -f "$COMPOSE_FILE" ps || true'
+        }
+    }
+}

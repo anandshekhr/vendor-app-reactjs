@@ -99,12 +99,53 @@ PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 
 ## Deployment
 
+Production and staging are served at **vendor.thenearbyshop.com** (replacing tnbs-vendor-service), deployed by
+Jenkins with [`deploy/jenkins/Jenkinsfile.vendor-portal`](deploy/jenkins/Jenkinsfile.vendor-portal).
+
+| Piece | What it does |
+|---|---|
+| [`Dockerfile`](Dockerfile) | `--target test`: typecheck + unit tests. Default target: static build served by nginx on 8080, with `/healthz` and `/version.json` (deployed version and API) |
+| [`deploy/nginx.conf`](deploy/nginx.conf) | SPA fallback, caching, security headers, and 301s from the old tnbs-vendor-service URLs (`/vendors/login/`, `/vendors/dashboard/`, `/onboarding/store-setup/`, …) |
+| [`deploy/compose/vendor-portal-stack.yml`](deploy/compose/vendor-portal-stack.yml) | Staging: built against `https://staging-api.thenearbyshop.com`, container `vendor_portal`, alias `vendor-portal` on the shared `webnet` network, no published port |
+| [`deploy/compose/vendor-portal-stack.prod.yml`](deploy/compose/vendor-portal-stack.prod.yml) | Production: built against `https://api.thenearbyshop.com`, alias `vendor-portal-prod` |
+
+TLS and the domain belong to api-services' shared edge nginx (`deploy/nginx/api-stage.conf`), which proxies
+vendor.thenearbyshop.com to `vendor-portal:8080`.
+
+### Jenkins setup (once)
+
+Create a **Multibranch Pipeline** (or Pipeline) job for this repository with script path
+`deploy/jenkins/Jenkinsfile.vendor-portal`, on the same Jenkins/Docker host as the api-services jobs. The agent needs
+the Docker CLI with Compose v2 and access to the host's Docker daemon (like the other deploy jobs).
+
+**Build with Parameters**: `ENVIRONMENT` (staging/production), optional `DEPLOY_VERSION` (SemVer; required for
+production, which also only runs from `main` and asks for confirmation), `RUN_TESTS`, `RUN_SMOKE_TEST`. The job tests in
+Docker, builds and starts the container, waits for its healthcheck, checks `/version.json` inside the container
+(version and API origin), then checks that https://vendor.thenearbyshop.com serves the same build. If the edge still
+points elsewhere, the build is marked **unstable**, not failed.
+
+### Cut-over from tnbs-vendor-service
+
+1. Run this job for **staging**. The portal starts next to the old dashboard; nothing public changes yet.
+2. Deploy api-services' edge change (the vendor.thenearbyshop.com upstream becomes `vendor-portal:8080`) with its
+   `Jenkinsfile.edge` job.
+3. Re-run this job (or open https://vendor.thenearbyshop.com/version.json) to confirm the new build is live.
+4. After a few days, disable tnbs-vendor-service's Jenkins job and stop its container
+   (`docker compose -f deploy/compose/vendor-stack.yml down` in its checkout). Until then, rolling back is a one-line edge
+   change: set the upstream back to `http://vendor-web:8040`.
+
+The API already allows this origin (`DJANGO_CORS_EXTRA_ORIGINS` includes `https://vendor.thenearbyshop.com`).
+Production: the edge points at the staging container today (staging is the only live API stack); when production goes
+live, deploy this job with `ENVIRONMENT=production` and switch the edge upstream to `vendor-portal-prod:8080`.
+
+### Local
+
 ```bash
-docker build --build-arg VITE_API_BASE_URL=https://api.thenearbyshop.com -t tnbs-vendor-portal .
+docker build --build-arg VITE_API_BASE_URL=https://staging-api.thenearbyshop.com -t tnbs-vendor-portal .
 docker run -p 8080:8080 tnbs-vendor-portal
 ```
 
-The image is a static nginx server ([`deploy/nginx.conf`](deploy/nginx.conf)). Its SPA fallback means refreshing a nested route like `/orders/123` returns the app, not a 404. Hashed assets are cached for a year and `index.html` is never cached. `/healthz` is the health check. Because `VITE_*` values are baked in at build time, build one image per environment.
+Because `VITE_*` values are baked in at build time, build one image per environment.
 
 ### Monitoring recommendations
 

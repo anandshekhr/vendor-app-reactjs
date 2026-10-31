@@ -1,0 +1,28 @@
+# Production vendor portal -- see vendor-portal-stack.yml. A separate compose project so a staging
+# deploy can never touch production. Service is `vendor-portal-prod` so its DNS alias on the shared
+# webnet doesn't collide with staging's (same pattern as web / web-prod in api-services).
+#
+# The edge currently sends vendor.thenearbyshop.com to the STAGING container, because staging is the
+# only live API stack. When production goes live, switch the upstream in api-services'
+# deploy/nginx/api-stage.conf to http://vendor-portal-prod:8080.
+name: vendor-portal-stack-prod
+
+services:
+  vendor-portal-prod:
+    build:
+      context: ../..
+      args:
+        VITE_API_BASE_URL: https://api.thenearbyshop.com
+        APP_VERSION: ${APP_VERSION:-unknown}
+    image: tnbs-vendor-portal:production
+    container_name: vendor_portal_prod
+    restart: unless-stopped
+    expose:
+      - "8080"
+    networks:
+      - webnet
+
+networks:
+  webnet:
+    external: true
+    name: webnet

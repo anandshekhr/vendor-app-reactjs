@@ -1,0 +1,28 @@
+# Staging vendor portal -- this repo's React app (static files served by nginx), deployed by
+# deploy/jenkins/Jenkinsfile.vendor-portal. It replaces tnbs-vendor-service on vendor.thenearbyshop.com.
+#
+# Reachable only through the shared edge nginx (api-services' edge-stack, `webnet` network), which
+# proxies vendor.thenearbyshop.com to `vendor-portal:8080`. No host port is published, so nobody can
+# bypass TLS. The API origin is baked into the bundle at build time (Vite), so staging and production
+# are separate images.
+name: vendor-portal-stack
+
+services:
+  vendor-portal:
+    build:
+      context: ../..
+      args:
+        VITE_API_BASE_URL: https://staging-api.thenearbyshop.com
+        APP_VERSION: ${APP_VERSION:-unknown}
+    image: tnbs-vendor-portal:staging
+    container_name: vendor_portal
+    restart: unless-stopped
+    expose:
+      - "8080"
+    networks:
+      - webnet
+
+networks:
+  webnet:
+    external: true
+    name: webnet
