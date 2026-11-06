@@ -48,7 +48,8 @@ export function VerifyOtpPage() {
       dispatch(signedIn({ userId: res.user_id, vendorId: res.vendorUserId, phone }));
       navigate(state?.from && state.from !== '/login' ? state.from : '/dashboard', { replace: true });
     } catch (err) {
-      if (isApiError(err) && err.status === 403) {
+      // No vendor profile for this number: 404 from /api/v1/login/verify-otp (403 from the older v2 endpoint).
+      if (isApiError(err) && (err.status === 403 || err.status === 404)) {
         setMessage({ tone: 'error', text: 'This number has no active vendor account yet. New applications can sign in once approved.', notVendor: true });
       } else {
         setMessage({ tone: 'error', text: isApiError(err) ? err.message : 'Verification failed.' });

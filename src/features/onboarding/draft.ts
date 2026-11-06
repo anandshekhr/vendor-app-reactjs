@@ -1,4 +1,4 @@
-import { normalizeIndianMobile } from '@/utils/phone';
+import { toIndianE164 } from '@/utils/phone';
 
 export type StepId = 'phone' | 'business' | 'categories' | 'address' | 'service' | 'documents' | 'review';
 
@@ -85,7 +85,7 @@ export function buildApplicationFormData(d: OnboardingDraft): FormData {
   const fd = new FormData();
   fd.append('vendor_name', d.vendorName.trim());
   fd.append('email', d.email.trim());
-  fd.append('phone', normalizeIndianMobile(d.phone));
+  fd.append('phone', toIndianE164(d.phone));
   // Older servers read this flag; updated ones ignore it and check their own OTP records.
   fd.append('phone_verified', String(d.phoneVerified));
   fd.append('business_name', d.businessName.trim());

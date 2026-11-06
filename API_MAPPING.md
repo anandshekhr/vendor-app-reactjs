@@ -61,8 +61,8 @@ Authentication: `Authorization: Bearer <access>`; refresh via `POST /api/v2/toke
 
 | Feature | Method & path | Request | Response | Notes |
 |---|---|---|---|---|
-| Request login OTP | `POST /api/v2/login/request-otp` | `{phone_number}` | `{message}` | OTP sent via WhatsApp. No trailing slash. |
-| Verify OTP / login | `POST /api/v2/login/verify-otp` | `{phone_number, otp, role: "vendor"}` | `{token: {access, refresh}, user_id, vendorUserId, bdaUserId}` | Returns **403** `{"error": "No vendor profile found..."}` when the phone has no vendor profile — the portal routes those users to onboarding. |
+| Request login OTP | `POST /api/v1/login/request-otp` | `{phone_number: "+91XXXXXXXXXX"}` | `{message}` | The same login/signup API as the customer apps. OTP sent via WhatsApp. No trailing slash. |
+| Verify OTP / login | `POST /api/v1/login/verify-otp` | `{phone_number: "+91XXXXXXXXXX", otp, role: "vendor"}` | `{token: {access, refresh}, user_id, vendorUserId, bdaUserId, shopId, shopSlug}` | Users are stored and matched as `+91` + 10 digits (`api.v1.authenticator`). **404** when the number has no vendor profile — the portal points those users to onboarding / application status. 5 wrong codes lock the number for 15 minutes (429). The older `/api/v2/login/*` stored numbers as sent (no `+91`) and is no longer used. |
 | Refresh | `POST /api/v2/token/refresh/` | `{refresh}` | `{access}` | |
 | Logout | `POST /api/v2/logout` | — | `{message}` | Server only clears the Django session; JWTs are not blacklisted (gap G-1). The portal clears tokens locally regardless. |
 
@@ -96,7 +96,7 @@ The self-service application flow from `apps/vendor_onboarding` (reviewed by adm
 **Selling starts on approval.** A product (or hybrid) seller registers, then picks at least 5 starter products with their
 own price and opening stock. Admins can't approve the application until the 5 are chosen. Activation creates the
 vendor account and shop and lists the starter products on it (prices clamped to the current MRP). The vendor can then
-sign in with OTP. Before that, `/api/v2/login/verify-otp` returns 403 and the portal points them to **Check application status**.
+sign in with OTP. Before that, `/api/v1/login/verify-otp` returns 404 and the portal points them to **Check application status**.
 
 Not supported by the application API: delivery/service radius.
 

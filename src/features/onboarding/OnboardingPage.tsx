@@ -7,7 +7,7 @@ import { ErrorState } from '@/components/feedback/ErrorState';
 import { BackendGap } from '@/components/feedback/BackendGap';
 import { StatusBadge } from '@/components/feedback/StatusBadge';
 import { isApiError } from '@/services/api/errors';
-import { isValidIndianMobile, normalizeIndianMobile } from '@/utils/phone';
+import { isValidIndianMobile, normalizeIndianMobile, toIndianE164 } from '@/utils/phone';
 import { cn } from '@/utils/cn';
 import { uuid } from '@/utils/id';
 import type { OnboardingCategory, VendorApplication } from '@/types/api';
@@ -101,7 +101,7 @@ export function OnboardingPage() {
     if (!isValidIndianMobile(draft.phone)) return setErrors({ phone: 'Enter a valid 10-digit mobile number.' });
     setErrors({});
     try {
-      await sendOtp(normalizeIndianMobile(draft.phone)).unwrap();
+      await sendOtp(toIndianE164(draft.phone)).unwrap();
       setOtpSent(true);
     } catch (err) {
       setErrors({ phone: isApiError(err) ? err.message : 'Could not send OTP.' });
@@ -110,7 +110,7 @@ export function OnboardingPage() {
 
   const onVerifyOtp = async () => {
     try {
-      const res = await verifyOtp({ phone: normalizeIndianMobile(draft.phone), otp: draft.otp }).unwrap();
+      const res = await verifyOtp({ phone: toIndianE164(draft.phone), otp: draft.otp }).unwrap();
       if (res.verified) {
         set('phoneVerified', true);
         setErrors({});

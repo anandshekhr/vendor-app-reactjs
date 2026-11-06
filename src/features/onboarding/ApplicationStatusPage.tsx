@@ -6,7 +6,7 @@ import { Logo } from '@/components/layout/Logo';
 import { StatusBadge } from '@/components/feedback/StatusBadge';
 import { isApiError } from '@/services/api/errors';
 import { formatCurrency, formatDateTime } from '@/utils/format';
-import { isValidIndianMobile, normalizeIndianMobile } from '@/utils/phone';
+import { isValidIndianMobile, normalizeIndianMobile, toIndianE164 } from '@/utils/phone';
 import type { ApplicantApplication } from '@/types/api';
 import { useLookupApplicationsMutation, useSaveStarterProductsMutation, useSendOnboardingOtpMutation } from './api';
 import { StarterProductPicker } from './StarterProductPicker';
@@ -32,7 +32,7 @@ export function ApplicationStatusPage() {
     if (!isValidIndianMobile(phone)) return setError('Enter a valid 10-digit mobile number.');
     setError(undefined);
     try {
-      await sendOtp(normalizeIndianMobile(phone)).unwrap();
+      await sendOtp(toIndianE164(phone)).unwrap();
       setOtpSent(true);
     } catch (err) {
       setError(isApiError(err) ? err.message : 'Could not send OTP.');
@@ -42,7 +42,7 @@ export function ApplicationStatusPage() {
   const onLookup = async () => {
     setError(undefined);
     try {
-      const res = await lookup({ phone: normalizeIndianMobile(phone), otp }).unwrap();
+      const res = await lookup({ phone: toIndianE164(phone), otp }).unwrap();
       setApplications(res.applications);
     } catch (err) {
       setError(isApiError(err) ? err.message : 'Could not check your application.');

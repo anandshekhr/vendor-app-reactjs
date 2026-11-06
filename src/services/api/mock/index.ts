@@ -30,11 +30,17 @@ const routes: [string, string, Handler][] = [];
 const on = (method: string, pattern: string, handler: Handler) => routes.push([method, pattern, handler]);
 
 // ─── Auth ───
-on('POST', '/api/v2/login/request-otp', () => [200, { message: 'OTP sent via WhatsApp.' }]);
-on('POST', '/api/v2/login/verify-otp', ({ body }) =>
-  body?.otp === '1234'
-    ? [200, { token: { access: fakeJwt(), refresh: 'mock-refresh' }, user_id: 1, vendorUserId: 1, bdaUserId: null }]
-    : [400, { error: 'Invalid or expired OTP' }],
+// Mirrors /api/v1/login (the shared login/signup API): numbers must arrive as +91XXXXXXXXXX.
+const e164 = (v: unknown) => /^\+91[6-9]\d{9}$/.test(String(v ?? ''));
+on('POST', '/api/v1/login/request-otp', ({ body }) =>
+  e164(body?.phone_number) ? [200, { message: 'OTP sent via WhatsApp.' }] : [400, { error: 'Phone number must be +91 followed by 10 digits.' }],
+);
+on('POST', '/api/v1/login/verify-otp', ({ body }) =>
+  !e164(body?.phone_number)
+    ? [400, { message: 'Phone number must be +91 followed by 10 digits.' }]
+    : body?.otp === '1234'
+      ? [200, { message: 'Login successful.', token: { access: fakeJwt(), refresh: 'mock-refresh' }, user_id: 1, vendorUserId: 1, bdaUserId: null, shopId: 1, shopSlug: 'shop' }]
+      : [400, { message: 'Invalid OTP.', code: 'otp_invalid' }],
 );
 on('POST', '/api/v2/token/refresh/', () => [200, { access: fakeJwt() }]);
 on('POST', '/api/v2/logout', () => [200, { message: 'Logged out successfully' }]);
@@ -254,6 +260,7 @@ on('POST', '/api/vendor-onboarding/send-otp/', () => [200, { detail: 'OTP has be
 on('POST', '/api/vendor-onboarding/verify-otp/', ({ body }) => (body.otp === '1234' ? [200, { verified: true }] : [400, { detail: 'Invalid or expired OTP.', verified: false }]));
 on('POST', '/api/vendor-onboarding/applications/', ({ db, body }) => {
   const fd = body as FormData;
+  if (!e164(fd.get('phone'))) return [400, { phone: ['Phone must be +91 followed by 10 digits.'] }];
   const categoryIds = fd.getAll('category_ids').map(Number);
   const product = categoryIds.some((id) => id === 10 || id === 11);
   const id = db.applications.length + 1;

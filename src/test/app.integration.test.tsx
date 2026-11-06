@@ -36,7 +36,7 @@ describe('authentication', () => {
     await user.click(screen.getByRole('button', { name: 'Send OTP' }));
     await user.type(await screen.findByLabelText(/^One-time password/), '9999');
     await user.click(screen.getByRole('button', { name: 'Verify and sign in' }));
-    expect(await screen.findByText('Invalid or expired OTP')).toBeInTheDocument();
+    expect(await screen.findByText('Invalid OTP.')).toBeInTheDocument();
   });
 });
 

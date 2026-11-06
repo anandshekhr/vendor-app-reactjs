@@ -12,6 +12,9 @@ export interface VerifyOtpResponse {
   user_id: number;
   vendorUserId: number | null;
   bdaUserId: number | null;
+  /** Returned by /api/v1/login/verify-otp for vendors. */
+  shopId?: number | null;
+  shopSlug?: string | null;
 }
 
 // ─── Vendor / shop ───────────────────────────────────────────────────────────
