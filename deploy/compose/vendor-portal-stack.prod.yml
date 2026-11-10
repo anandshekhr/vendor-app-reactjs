@@ -2,9 +2,8 @@
 # deploy can never touch production. Service is `vendor-portal-prod` so its DNS alias on the shared
 # webnet doesn't collide with staging's (same pattern as web / web-prod in api-services).
 #
-# The edge currently sends vendor.thenearbyshop.com to the STAGING container, because staging is the
-# only live API stack. When production goes live, switch the upstream in api-services'
-# deploy/nginx/api-stage.conf to http://vendor-portal-prod:8080.
+# Served publicly on vendor.thenearbyshop.com: the edge (api-services deploy/nginx/api-stage.conf) proxies it to
+# http://vendor-portal-prod:8080.
 name: vendor-portal-stack-prod
 
 services:

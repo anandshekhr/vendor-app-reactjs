@@ -154,12 +154,12 @@ pipeline {
             when { expression { params.RUN_SMOKE_TEST } }
             steps {
                 script {
-                    // Public check through the edge. Only staging is routed today (see the prod compose file),
-                    // and the edge must already point at this container -- if it still points at
-                    // tnbs-vendor-service the build is marked UNSTABLE rather than failed, so the portal can
-                    // be deployed before the edge switch.
-                    if (env.TARGET_ENV != 'staging') {
-                        echo 'Production is not routed through vendor.thenearbyshop.com yet; skipping the public check.'
+                    // Public check through the edge, which serves the PRODUCTION build on
+                    // vendor.thenearbyshop.com (api-services api-stage.conf -> vendor-portal-prod:8080). The
+                    // staging build has no public hostname. If the edge doesn't point here yet the build is marked
+                    // UNSTABLE rather than failed, so the portal can be deployed before the edge switch.
+                    if (env.TARGET_ENV != 'production') {
+                        echo 'The staging build has no public hostname; skipping the public check.'
                         return
                     }
                     def served = sh(script: 'curl -fsS --max-time 15 "$PUBLIC_URL/version.json?b=$BUILD_NUMBER" || true', returnStdout: true).trim()

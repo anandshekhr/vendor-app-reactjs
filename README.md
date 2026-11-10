@@ -109,8 +109,9 @@ Jenkins with [`deploy/jenkins/Jenkinsfile.vendor-portal`](deploy/jenkins/Jenkins
 | [`deploy/compose/vendor-portal-stack.yml`](deploy/compose/vendor-portal-stack.yml) | Staging: built against `https://staging-api.thenearbyshop.com`, container `vendor_portal`, alias `vendor-portal` on the shared `webnet` network, no published port |
 | [`deploy/compose/vendor-portal-stack.prod.yml`](deploy/compose/vendor-portal-stack.prod.yml) | Production: built against `https://api.thenearbyshop.com`, alias `vendor-portal-prod` |
 
-TLS and the domain belong to api-services' shared edge nginx (`deploy/nginx/api-stage.conf`), which proxies
-vendor.thenearbyshop.com to `vendor-portal:8080`.
+TLS and the domain belong to api-services' shared edge nginx (`deploy/nginx/api-stage.conf`) on the Jenkins server,
+which proxies vendor.thenearbyshop.com to the **production** build, `vendor-portal-prod:8080` (it calls
+https://api.thenearbyshop.com). The staging build has no public hostname.
 
 ### Jenkins setup (once)
 
@@ -122,22 +123,22 @@ the Docker CLI with Compose v2 and access to the host's Docker daemon (like the 
 **Build with Parameters**: `ENVIRONMENT` (staging/production), optional `DEPLOY_VERSION` (SemVer; required for
 production, which also only runs from `main` and asks for confirmation), `RUN_TESTS`, `RUN_SMOKE_TEST`. The job tests in
 Docker, builds and starts the container, waits for its healthcheck, checks `/version.json` inside the container
-(version and API origin), then checks that https://vendor.thenearbyshop.com serves the same build. If the edge still
-points elsewhere, the build is marked **unstable**, not failed.
+(version and API origin). Production runs also check that https://vendor.thenearbyshop.com serves the same build; if the
+edge points elsewhere, the build is marked **unstable**, not failed.
 
 ### Cut-over from tnbs-vendor-service
 
-1. Run this job for **staging**. The portal starts next to the old dashboard; nothing public changes yet.
-2. Deploy api-services' edge change (the vendor.thenearbyshop.com upstream becomes `vendor-portal:8080`) with its
+1. Run this job from `main` with `ENVIRONMENT=production`. The portal starts next to the old dashboard; nothing public
+   changes yet.
+2. Deploy api-services' edge change (the vendor.thenearbyshop.com upstream becomes `vendor-portal-prod:8080`) with its
    `Jenkinsfile.edge` job.
-3. Re-run this job (or open https://vendor.thenearbyshop.com/version.json) to confirm the new build is live.
+3. Open https://vendor.thenearbyshop.com/version.json (or re-run this job) to confirm the new build is live.
 4. After a few days, disable tnbs-vendor-service's Jenkins job and stop its container
    (`docker compose -f deploy/compose/vendor-stack.yml down` in its checkout). Until then, rolling back is a one-line edge
    change: set the upstream back to `http://vendor-web:8040`.
 
-The API already allows this origin (`DJANGO_CORS_EXTRA_ORIGINS` includes `https://vendor.thenearbyshop.com`).
-Production: the edge points at the staging container today (staging is the only live API stack); when production goes
-live, deploy this job with `ENVIRONMENT=production` and switch the edge upstream to `vendor-portal-prod:8080`.
+The production API already allows this origin (`https://vendor.thenearbyshop.com` is in its CORS list). If you deploy
+only staging, nothing serves the domain: the edge answers **502**.
 
 ### Local
 
