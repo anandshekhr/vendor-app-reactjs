@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Database, LogOut, Monitor, Moon, Sun } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ChevronRight, Database, LogOut, Monitor, Moon, Printer, Sun } from 'lucide-react';
 import { Button, Card, CardBody, CardHeader, ConfirmDialog } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BackendGap } from '@/components/feedback/BackendGap';
@@ -11,6 +12,7 @@ import { useLogout } from '@/features/auth/useLogout';
 import { db, getMeta, META_CATALOGUE_SYNCED_AT } from '@/services/offline/db';
 import { formatRelative, maskPhone } from '@/utils/format';
 import { cn } from '@/utils/cn';
+import { usePrinterSettings } from '@/services/autoprint/settings';
 
 const THEMES: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -25,6 +27,7 @@ export function SettingsPage() {
   const theme = useAppSelector((s) => s.ui.theme);
   const auth = useAppSelector((s) => s.auth);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const printer = usePrinterSettings();
   const products = useLiveQuery(() => db.products.count(), [], 0);
   const unsynced = useLiveQuery(() => db.sales.where('status').anyOf('pending', 'syncing', 'unknown', 'conflict').count(), [], 0);
   const syncedAt = useLiveQuery(() => getMeta<number>(META_CATALOGUE_SYNCED_AT), [], undefined as number | undefined);
@@ -78,6 +81,24 @@ export function SettingsPage() {
             >
               Clear cached catalogue
             </Button>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader title="Printer" />
+          <CardBody>
+            <Link to="/settings/printer" className="flex items-center justify-between gap-3 rounded-md p-1 text-sm hover:bg-ink/[0.03]">
+              <span className="flex items-center gap-3">
+                <Printer className="h-5 w-5 text-ink-muted" />
+                <span>
+                  <span className="block font-medium">Printer and auto-print</span>
+                  <span className="text-xs text-ink-muted">
+                    {printer.autoPrint ? 'Auto-print is on for this device' : 'Auto-print is off'} ·{' '}
+                    {printer.connection === 'browser' ? 'print dialog' : printer.deviceLabel ?? 'thermal printer not connected'} · {printer.paper}
+                  </span>
+                </span>
+              </span>
+              <ChevronRight className="h-4 w-4 text-ink-subtle" />
+            </Link>
           </CardBody>
         </Card>
         <Card>

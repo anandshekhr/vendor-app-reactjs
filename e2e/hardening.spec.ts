@@ -73,3 +73,35 @@ test('employees: add a staff member with just name and phone', async ({ page }) 
   await dialog.getByRole('button', { name: 'Add employee' }).click();
   await expect(page.getByRole('row').filter({ hasText: 'Sunita Verma' })).toHaveCount(1);
 });
+
+test('printer: auto-print a POS receipt and see it in the print log', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'tnbs.printer.settings',
+      JSON.stringify({ autoPrint: true, connection: 'browser', paper: '80mm', copies: 1, events: { newOrder: true, acceptedOrder: false, posSale: true, newBooking: false } }),
+    );
+  });
+  await login(page);
+  await page.goto('/pos');
+  await expect(page.getByText(/Catalogue: \d+ products/)).toBeVisible({ timeout: 15_000 });
+  await page.getByLabel('Barcode').fill('890100000100');
+  await page.getByRole('button', { name: 'Look up' }).click();
+  await expect(page.getByLabel('Quantity of Amul Taaza Milk 500ml').first().or(page.getByRole('button', { name: /View cart/ }))).toBeVisible();
+  const cartButton = page.getByRole('button', { name: /View cart/ });
+  if (await cartButton.isVisible()) await cartButton.click();
+  await page.getByRole('button', { name: /Charge/ }).locator('visible=true').click();
+  const heading = page.getByRole('heading', { name: /Sale #\d+ completed/ });
+  await expect(heading).toBeVisible();
+  const saleId = (await heading.textContent())!.match(/#(\d+)/)![1];
+  await page.getByRole('button', { name: 'New sale' }).click();
+  // In-app navigation keeps the mock API's state.
+  await page.evaluate(`window.history.pushState({}, '', '/settings/printer'); window.dispatchEvent(new PopStateEvent('popstate'));`);
+  await expect(page.getByRole('heading', { name: 'Printer', exact: true })).toBeVisible();
+  const entry = page.getByRole('listitem').filter({ hasText: `Receipt #${saleId}` });
+  await expect(entry).toBeVisible();
+  await expect(entry.getByText('Auto')).toBeVisible();
+  await expect(entry.getByLabel('Printed')).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Print automatically on this device' })).toBeChecked();
+  await entry.getByRole('button', { name: 'Reprint' }).click();
+  await expect(page.getByText('Sent to the printer')).toBeVisible();
+});

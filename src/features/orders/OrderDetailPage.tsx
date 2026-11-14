@@ -16,6 +16,10 @@ import { DeliveryProgress } from '@/features/delivery/DeliveryProgress';
 import { DeliveryStatusCard } from '@/features/delivery/DeliveryStatusCard';
 import { useGetOrderFullQuery, useGetOrderQuery, useOrderActionMutation } from './api';
 import { allowedActions, type ActionSpec } from './transitions';
+import { useAppSelector } from '@/hooks/store';
+import { autoPrintAcceptedOrder } from '@/services/autoprint/autoPrint';
+import { orderSlip } from '@/services/autoprint/document';
+import { runPrintJob } from '@/services/autoprint/printer';
 
 export function OrderDetailPage() {
   const { id } = useParams();
@@ -27,6 +31,7 @@ export function OrderDetailPage() {
   // unscoped v2 detail, and only after the scoped call confirmed the order belongs to this shop.
   const full = useGetOrderFullQuery(orderId, { skip: !order || order.items !== undefined });
   const [doAction, actionState] = useOrderActionMutation();
+  const business = useAppSelector((s) => s.auth.business);
   const [pending, setPending] = useState<ActionSpec | null>(null);
   const [note, setNote] = useState('');
   const [assignOpen, setAssignOpen] = useState(false);
@@ -48,8 +53,9 @@ export function OrderDetailPage() {
 
   const run = async (spec: ActionSpec, actionNote = '') => {
     try {
-      await doAction({ id: order.id, action: spec.action, note: actionNote }).unwrap();
+      const updated = await doAction({ id: order.id, action: spec.action, note: actionNote }).unwrap();
       toast.success(`Order #${order.id} updated`, `Now: ${titleCase(spec.to)}`);
+      if (spec.action === 'accept') void autoPrintAcceptedOrder({ ...order, ...updated }, business);
       setPending(null);
       setNote('');
     } catch (err) {
@@ -74,6 +80,17 @@ export function OrderDetailPage() {
         description={`Placed ${formatDateTime(order.created_at)}${order.external_id ? ` · Ref ${order.external_id}` : ''}${v.source === 'pos' ? ' · In-store POS sale' : ''}`}
         actions={
           <>
+            <Button
+              variant="outline"
+              leftIcon={<Printer className="h-4 w-4" />}
+              onClick={async () => {
+                const ok = await runPrintJob(`order:${order.id}:manual:${Date.now()}`, () => orderSlip({ ...order, items: v.items, item_total: v.itemTotal ?? undefined, discount_amount: v.discount ?? undefined, shipping_amount: v.shipping ?? undefined, customer_address: v.address }, business, 'ORDER'), { auto: false });
+                if (ok) toast.success('Order slip sent to the printer');
+                else toast.error('Could not print', 'Check Settings → Printer.');
+              }}
+            >
+              Print slip
+            </Button>
             <Link to={`/orders/${order.id}/invoice`}>
               <Button variant="outline" leftIcon={<Printer className="h-4 w-4" />}>
                 Print invoice

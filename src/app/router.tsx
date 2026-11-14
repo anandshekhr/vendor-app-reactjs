@@ -49,6 +49,7 @@ const QrPrintPage = page(() => import('@/features/profile/QrPrintPage'), 'QrPrin
 const ProfilePage = page(() => import('@/features/profile/ProfilePage'), 'ProfilePage');
 const DocumentsPage = page(() => import('@/features/profile/DocumentsPage'), 'DocumentsPage');
 const SettingsPage = page(() => import('@/features/profile/SettingsPage'), 'SettingsPage');
+const PrinterSettingsPage = page(() => import('@/features/printer/PrinterSettingsPage'), 'PrinterSettingsPage');
 const NotificationsPage = page(() => import('@/features/notifications/NotificationsPage'), 'NotificationsPage');
 const ReportsPage = page(() => import('@/features/reports/ReportsPage'), 'ReportsPage');
 
@@ -116,6 +117,7 @@ export const routes: RouteObject[] = [
       { path: 'profile/documents', element: <DocumentsPage /> },
       { path: 'profile/qr', element: <QrPage /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'settings/printer', element: <PrinterSettingsPage /> },
       { path: 'notifications', element: <NotificationsPage /> },
       { path: 'reports', element: gated('reports', <ReportsPage />) },
       { path: '*', element: <NotFoundPage /> },

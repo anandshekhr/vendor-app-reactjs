@@ -6,12 +6,15 @@ import { chatApi } from '@/features/chat/api';
 import { useAppDispatch, useAppSelector } from '@/hooks/store';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import { formatCurrency } from '@/utils/format';
+import { autoPrintNewBookings, autoPrintNewOrders } from '@/services/autoprint/autoPrint';
+import { loadPrinterSettings } from '@/services/autoprint/settings';
 import { bookingBaselineSet, notificationsAdded, orderBaselineSet, persistNotifications } from './notificationsSlice';
 
 /**
  * Polls the backend's real "since" endpoints for new orders/bookings (no push/WebSocket exists — API_MAPPING G-14).
  * The first run only records a baseline from page 1 so historical records do not flood the feed. Polling pauses
- * while the tab is hidden or the device is offline.
+ * while the device is offline, and while the tab is hidden unless auto-print is on (a counter PC printing new orders
+ * must keep checking with the portal in the background; browsers then slow the timer to about once a minute).
  */
 export function useActivityPolling() {
   const dispatch = useAppDispatch();
@@ -19,6 +22,9 @@ export function useActivityPolling() {
   const state = useAppSelector((s) => s.notifications);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const business = useAppSelector((s) => s.auth.business);
+  const businessRef = useRef(business);
+  businessRef.current = business;
 
   useEffect(() => {
     persistNotifications(state);
@@ -32,7 +38,8 @@ export function useActivityPolling() {
     let stopped = false;
 
     async function tick() {
-      if (stopped || document.hidden || !navigator.onLine) return;
+      if (stopped || !navigator.onLine) return;
+      if (document.hidden && !loadPrinterSettings().autoPrint) return;
       const { lastOrderId, lastBookingId } = stateRef.current;
       if (wantOrders) {
         try {
@@ -56,6 +63,7 @@ export function useActivityPolling() {
               );
               dispatch(orderBaselineSet(res.latest_id));
               dispatch(ordersApi.util.invalidateTags([{ type: 'Orders', id: 'LIST' }, 'Dashboard']));
+              void autoPrintNewOrders(dispatch, res.orders.map((o) => o.id), businessRef.current);
             }
           }
         } catch {
@@ -87,6 +95,7 @@ export function useActivityPolling() {
                 ),
               );
               dispatch(bookingBaselineSet(res.latest_id));
+              void autoPrintNewBookings(res.bookings, businessRef.current);
               dispatch(bookingsApi.util.invalidateTags([{ type: 'Bookings', id: 'LIST' }, 'ServiceDashboard']));
             }
           }

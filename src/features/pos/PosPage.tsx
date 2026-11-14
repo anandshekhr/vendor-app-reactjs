@@ -21,6 +21,10 @@ import { BackendGap } from '@/components/feedback/BackendGap';
 import { useAppDispatch, useAppSelector } from '@/hooks/store';
 import { useDebounce } from '@/hooks/useDebounce';
 import { config } from '@/constants/config';
+import { autoPrintPosReceipt } from '@/services/autoprint/autoPrint';
+import { receiptDocument } from '@/services/autoprint/document';
+import { runPrintJob } from '@/services/autoprint/printer';
+import { usePrinterSettings } from '@/services/autoprint/settings';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useToast } from '@/hooks/useToast';
@@ -85,6 +89,7 @@ export function PosPage() {
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [ambiguous, setAmbiguous] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const printer = usePrinterSettings();
   const [lookupBarcode] = useLazyPosLookupBarcodeQuery();
   const [checkout, checkoutState] = usePosCheckoutMutation();
   // One idempotency key per cart attempt; regenerated whenever the cart contents change.
@@ -123,6 +128,11 @@ export function PosPage() {
   useEffect(() => {
     setPaymentConfirmed(false);
   }, [cart.paymentMethod, total]);
+
+  // Auto-print the receipt when a sale completes (Settings → Printer). Each sale prints once per device.
+  useEffect(() => {
+    if (receipt) void autoPrintPosReceipt(receipt, business);
+  }, [receipt, business]);
 
   useEffect(() => {
     if (cart.lines.length === 0) {
@@ -522,7 +532,15 @@ export function PosPage() {
             <Button variant="outline" onClick={() => setReceipt(null)}>
               New sale
             </Button>
-            <Button onClick={printReceipt} leftIcon={<Printer className="h-4 w-4" />}>
+            <Button
+              onClick={async () => {
+                // A thermal printer gets the receipt directly; otherwise use the browser's print dialog.
+                if (!receipt || printer.connection === 'browser') return printReceipt();
+                const ok = await runPrintJob(`pos:reprint:${Date.now()}`, () => receiptDocument(receipt, business), { auto: false });
+                if (!ok) toast.error('Could not reach the printer', 'Check Settings → Printer.');
+              }}
+              leftIcon={<Printer className="h-4 w-4" />}
+            >
               Print receipt
             </Button>
           </>

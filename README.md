@@ -97,6 +97,28 @@ PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 * Only one sync runs at a time, even across browser tabs (Web Locks). After a sync, the catalogue is refreshed from the server.
 * Only the methods in `VITE_OFFLINE_PAYMENT_METHODS` are allowed offline. Online UPI/card sales need the cashier to confirm the payment arrived, because the backend records POS sales as paid without checking with the payment provider.
 
+## Printer setup and auto-print
+
+**Settings → Printer** (`/settings/printer`) sets up the printer for *this device* — each counter keeps its own setup in
+the browser, nothing is stored on the server.
+
+| Connection | Prints without a dialog | Works in |
+|---|---|---|
+| Any printer (print dialog) | Only if Chrome/Edge is started with `--kiosk-printing` (prints to the default printer) | Every browser |
+| USB thermal printer (ESC/POS) | Yes | Chrome/Edge on a computer; Chrome on Android with USB-OTG |
+| Serial / Bluetooth thermal printer (ESC/POS) | Yes | Chrome/Edge on a computer (Bluetooth printers paired as a COM port) |
+
+Pick the printer once with **Connect printer** (a browser permission prompt); the browser remembers it. Paper: 58 mm
+(32 columns), 80 mm (48 columns) or A4 (dialog only); 1–3 copies; optional paper cut.
+
+**Automatic printing** (off by default) can print: an order slip when a **new online order** arrives, an order slip when
+you **accept** an order, the **receipt** when a POS sale completes, and a slip for each **new booking**. It runs while
+the portal is open on the device — also in a background tab (browsers then check about once a minute). Each job prints
+once per device even with several tabs open, and every print (manual or automatic) is in the **print log** with
+**Reprint**. Order slips leave out the customer's phone once it is masked (see contact privacy). Code:
+`src/services/autoprint/` (layout, ESC/POS encoder, HTML renderer, transports, dedupe) and
+`src/features/printer/PrinterSettingsPage.tsx`.
+
 ## Deployment
 
 Production and staging are served at **vendor.thenearbyshop.com** (replacing tnbs-vendor-service), deployed by
