@@ -1,21 +1,35 @@
 import type { BookingAction, BookingStatus, PaymentStatus } from '@/types/api';
 
 /**
- * The backend performs no transition validation for booking actions (API_MAPPING G-10), so the portal restricts the
- * offered actions to a sensible lifecycle. This is a UX safeguard, not an authorisation control.
+ * The server decides what can happen next and returns it as `allowed_actions` (apps.services.booking_flow).
+ * This fallback mirrors those rules for older servers that don't send the list.
  */
-export function allowedBookingActions(status: BookingStatus, payment: PaymentStatus): BookingAction[] {
+export function allowedBookingActions(status: BookingStatus, payment: PaymentStatus, confirmed = true): BookingAction[] {
   const actions: BookingAction[] = [];
-  if (status === 'SCHEDULED') actions.push('start', 'reschedule', 'cancel');
-  if (status === 'IN_PROGRESS') actions.push('complete');
+  if (status === 'SCHEDULED') {
+    if (!confirmed) actions.push('accept', 'reject');
+    actions.push('start', 'reschedule');
+  }
+  if (status === 'SCHEDULED' || status === 'IN_PROGRESS') actions.push('complete', 'cancel', 'assign');
   if (status !== 'CANCELLED' && payment !== 'PAID' && payment !== 'REFUNDED') actions.push('collect_balance');
   return actions;
 }
 
+/** The actions to offer: the server's list when it sends one, otherwise the local fallback. */
+export function bookingActionsFor(b: { status: BookingStatus; payment_status: PaymentStatus; vendor_confirmed_at?: string | null; allowed_actions?: BookingAction[] }): BookingAction[] {
+  return b.allowed_actions ?? allowedBookingActions(b.status, b.payment_status, b.vendor_confirmed_at !== null);
+}
+
+/** Actions that need the shop to give the customer a reason. */
+export const REASON_ACTIONS: BookingAction[] = ['reject', 'cancel'];
+
 export const BOOKING_ACTION_LABELS: Record<BookingAction, string> = {
+  accept: 'Accept booking',
+  reject: 'Reject',
   start: 'Mark in progress',
   complete: 'Mark completed',
   cancel: 'Cancel booking',
+  assign: 'Assign staff',
   reschedule: 'Reschedule',
   collect_balance: 'Record balance collected',
 };

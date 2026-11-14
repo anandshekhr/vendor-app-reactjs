@@ -31,7 +31,8 @@ export const config = {
     .map((m) => m.trim().toLowerCase())
     .filter(Boolean),
   posStaleCatalogueMinutes: num(env.VITE_POS_STALE_CATALOGUE_MINUTES, 60),
-  posServerIdempotency: env.VITE_POS_SERVER_IDEMPOTENCY === 'true',
+  // api-services dedupes POS checkouts by Idempotency-Key, so retries are safe. Set to 'false' only against an old API.
+  posServerIdempotency: env.VITE_POS_SERVER_IDEMPOTENCY !== 'false',
   pollIntervalMs: num(env.VITE_POLL_INTERVAL_MS, 20000),
 } as const;
 

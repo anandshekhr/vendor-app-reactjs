@@ -9,7 +9,6 @@ import { Pagination } from '@/components/tables/Pagination';
 import { SearchInput } from '@/components/forms/SearchInput';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { ErrorState } from '@/components/feedback/ErrorState';
-import { BackendGap } from '@/components/feedback/BackendGap';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatCurrency, formatNumber } from '@/utils/format';
 import { useGetProductQuery } from '@/features/products/api';
@@ -51,7 +50,7 @@ export function InventoryPage() {
           <>
             <Link to="/inventory/movements">
               <Button variant="outline" leftIcon={<History className="h-4 w-4" />}>
-                Adjustment log
+                Stock history
               </Button>
             </Link>
             <Link to="/scanner">
@@ -77,10 +76,6 @@ export function InventoryPage() {
           <StatCard label="Out of stock" value={formatNumber(s?.out_of_stock_count)} icon={<PackageX className="h-4 w-4" />} loading={summary.isLoading} tone={s?.out_of_stock_count ? 'danger' : 'neutral'} />
         </div>
       )}
-      <BackendGap className="mb-5" gap="G-8" title="No server-side stock ledger yet">
-        Adjustments are applied by the server, but it does not record movement type, reason, user or history. This browser keeps its own adjustment log meanwhile.
-        Expiry tracking and transfers between locations are not supported by the data model.
-      </BackendGap>
       <Card>
         <CardHeader title="Stock levels" />
         <div className="flex flex-col gap-3 border-b border-line p-3 sm:flex-row sm:items-center sm:justify-between">

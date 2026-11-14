@@ -11,6 +11,7 @@ export const TAGS = [
   'StoreHours',
   'Documents',
   'Dashboard',
+  'StockMovements',
   'ServiceDashboard',
   'Orders',
   'Order',

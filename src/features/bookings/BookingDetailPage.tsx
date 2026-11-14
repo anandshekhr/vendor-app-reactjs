@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { MessageSquare } from 'lucide-react';
-import { Button, Card, CardBody, CardHeader, ConfirmDialog, Dialog, Field, Input, Skeleton } from '@/components/ui';
+import { CheckCircle2, MessageSquare } from 'lucide-react';
+import { Button, Card, CardBody, CardHeader, ConfirmDialog, Dialog, Field, Input, Select, Skeleton, Textarea } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatusBadge } from '@/components/feedback/StatusBadge';
 import { ErrorState } from '@/components/feedback/ErrorState';
-import { BackendGap } from '@/components/feedback/BackendGap';
 import { useToast } from '@/hooks/useToast';
 import { formatCurrency, formatDateTime, titleCase } from '@/utils/format';
 import type { BookingAction } from '@/types/api';
+import { useAppSelector } from '@/hooks/store';
+import { useListProvidersQuery } from '@/features/employees/api';
 import { useBookingActionMutation, useGetBookingQuery } from './api';
-import { allowedBookingActions, BOOKING_ACTION_LABELS, rescheduleWindow } from './transitions';
+import { BOOKING_ACTION_LABELS, bookingActionsFor, REASON_ACTIONS, rescheduleWindow } from './transitions';
 import { CustomerContact } from '@/components/feedback/CustomerContact';
 
 function toLocalInput(iso: string) {
@@ -29,19 +30,27 @@ export function BookingDetailPage() {
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
+  const [reasonFor, setReasonFor] = useState<BookingAction | null>(null);
+  const [reason, setReason] = useState('');
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [providerId, setProviderId] = useState('');
+  const shopId = useAppSelector((s) => s.auth.business?.shopId);
+  const staff = useListProvidersQuery(shopId!, { skip: !shopId || !assignOpen });
 
   if (error) return <ErrorState error={error} onRetry={refetch} />;
   if (isLoading || !b) return <Skeleton className="h-96 w-full" />;
 
-  const actions = allowedBookingActions(b.status, b.payment_status);
+  const actions = bookingActionsFor(b);
   const durationMin = b.service_detail?.estimated_duration_minutes ?? Math.round((new Date(b.end_time).getTime() - new Date(b.start_time).getTime()) / 60000);
 
-  const run = async (action: BookingAction, extra: { start_time?: string; end_time?: string } = {}) => {
+  const run = async (action: BookingAction, extra: { start_time?: string; end_time?: string; reason?: string; provider_id?: number } = {}) => {
     try {
       await act({ id: b.id, action, ...extra }).unwrap();
       toast.success('Booking updated', BOOKING_ACTION_LABELS[action]);
       setConfirm(null);
       setRescheduleOpen(false);
+      setReasonFor(null);
+      setAssignOpen(false);
     } catch (err) {
       toast.error('Action rejected by server', err);
     }
@@ -60,13 +69,19 @@ export function BookingDetailPage() {
         actions={actions.map((a) => (
           <Button
             key={a}
-            variant={a === 'cancel' ? 'danger' : a === 'reschedule' || a === 'collect_balance' ? 'outline' : 'primary'}
+            variant={a === 'cancel' || a === 'reject' ? 'danger' : a === 'accept' || a === 'start' || a === 'complete' ? 'primary' : 'outline'}
             onClick={() => {
               if (a === 'reschedule') {
                 const local = toLocalInput(b.start_time);
                 setDate(local.date);
                 setTime(local.time);
                 setRescheduleOpen(true);
+              } else if (REASON_ACTIONS.includes(a)) {
+                setReason('');
+                setReasonFor(a);
+              } else if (a === 'assign') {
+                setProviderId(b.provider_id ? String(b.provider_id) : '');
+                setAssignOpen(true);
               } else setConfirm(a);
             }}
           >
@@ -99,9 +114,17 @@ export function BookingDetailPage() {
               </div>
             </CardBody>
           </Card>
-          <BackendGap gap="G-10" title="Accept/reject, employee assignment and slot-conflict checks are not exposed to vendors">
-            Rescheduling sends the new time directly; the server does not yet verify staff availability, so check your calendar first.
-          </BackendGap>
+          {b.status === 'SCHEDULED' && b.vendor_confirmed_at && (
+            <p className="flex items-center gap-2 text-sm text-emerald-700">
+              <CheckCircle2 className="h-4 w-4" /> You accepted this booking on {formatDateTime(b.vendor_confirmed_at)}.
+            </p>
+          )}
+          {b.status === 'CANCELLED' && b.cancellation_reason && (
+            <Card>
+              <CardHeader title="Cancellation reason" />
+              <CardBody className="text-sm">{b.cancellation_reason}</CardBody>
+            </Card>
+          )}
         </div>
         <div className="space-y-5">
           <Card>
@@ -154,8 +177,8 @@ export function BookingDetailPage() {
         description={
           confirm === 'collect_balance'
             ? `Confirm you collected ${formatCurrency(b.amount_due)} from the customer. This marks the booking as fully paid.`
-            : confirm === 'cancel'
-              ? 'The customer will see the booking as cancelled.'
+            : confirm === 'accept'
+              ? 'The customer is told the shop has confirmed the booking.'
               : undefined
         }
         confirmLabel={confirm ? BOOKING_ACTION_LABELS[confirm] : undefined}
@@ -199,6 +222,56 @@ export function BookingDetailPage() {
             <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
           </Field>
         </div>
+        <p className="mt-3 text-xs text-ink-subtle">The server refuses a time when the assigned staff member is already booked.</p>
+      </Dialog>
+      <Dialog
+        open={Boolean(reasonFor)}
+        onClose={() => setReasonFor(null)}
+        title={reasonFor === 'reject' ? 'Reject this booking?' : 'Cancel this booking?'}
+        description="The customer sees this reason."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setReasonFor(null)}>
+              Back
+            </Button>
+            <Button variant="danger" loading={actState.isLoading} disabled={reason.trim().length < 3} onClick={() => reasonFor && run(reasonFor, { reason: reason.trim() })}>
+              {reasonFor ? BOOKING_ACTION_LABELS[reasonFor] : ''}
+            </Button>
+          </>
+        }
+      >
+        <Field label="Reason" required>
+          <Textarea rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Fully booked that day — please choose another slot." />
+        </Field>
+      </Dialog>
+      <Dialog
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        title="Assign staff"
+        description="Only staff who are free at this booking's time can be assigned."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setAssignOpen(false)}>
+              Back
+            </Button>
+            <Button loading={actState.isLoading} disabled={!providerId} onClick={() => run('assign', { provider_id: Number(providerId) })}>
+              Assign
+            </Button>
+          </>
+        }
+      >
+        <Field label="Staff member" required>
+          <Select value={providerId} onChange={(e) => setProviderId(e.target.value)} disabled={staff.isLoading}>
+            <option value="">{staff.isLoading ? 'Loading…' : 'Choose…'}</option>
+            {(staff.data ?? []).map((p) => (
+              <option key={p.id} value={p.id} disabled={!p.is_available}>
+                {p.name}
+                {p.role ? ` — ${p.role}` : ''}
+                {!p.is_available ? ' (unavailable)' : ''}
+              </option>
+            ))}
+          </Select>
+        </Field>
       </Dialog>
     </>
   );

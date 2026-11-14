@@ -35,8 +35,8 @@ export const ordersApi = api.injectEndpoints({
       invalidatesTags: (_r, _e, { id }) => [{ type: 'Order', id }, { type: 'Orders', id: 'LIST' }, 'Dashboard'],
     }),
     /** Vendor's full v2 order list (includes `source`), used for POS sales history and reports. */
-    listVendorOrdersV2: build.query<Paginated<VendorOrderFull>, { page?: number; status?: string }>({
-      query: ({ page = 1, status }) => ({ url: '/api/v2/vendors/orders/', params: { page, status } }),
+    listVendorOrdersV2: build.query<Paginated<VendorOrderFull>, { page?: number; status?: string; source?: 'pos' | 'online' }>({
+      query: ({ page = 1, status, source }) => ({ url: '/api/v2/vendors/orders/', params: { page, status, source } }),
       transformResponse: (data: unknown) => normalizePage<VendorOrderFull>(data),
       providesTags: [{ type: 'PosSales', id: 'LIST' }, { type: 'Orders', id: 'LIST' }],
     }),

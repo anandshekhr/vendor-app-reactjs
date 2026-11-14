@@ -1,6 +1,6 @@
 import { api } from '@/services/api';
 import { normalizePage, type Paginated } from '@/services/api/pagination';
-import type { StockListItem, StockOperation, StockSummary, StockUpdateResponse } from '@/types/api';
+import type { StockListItem, StockMovement, StockMovementType, StockOperation, StockSummary, StockUpdateResponse } from '@/types/api';
 
 export const inventoryApi = api.injectEndpoints({
   endpoints: (build) => ({
@@ -22,11 +22,25 @@ export const inventoryApi = api.injectEndpoints({
       transformResponse: (data: unknown) => normalizePage<StockListItem>(data),
       providesTags: ['Stock'],
     }),
-    updateStock: build.mutation<StockUpdateResponse, { product_id?: number; barcode?: string; quantity: number; operation: StockOperation }>({
+    updateStock: build.mutation<
+      StockUpdateResponse,
+      { product_id?: number; barcode?: string; quantity: number; operation: StockOperation; movement_type?: StockMovementType; reason?: string; reference?: string }
+    >({
       query: (data) => ({ url: '/api/v2/vendors/stock/update/', method: 'POST', data }),
-      invalidatesTags: (res) => ['Stock', 'Dashboard', { type: 'Products', id: 'LIST' }, ...(res ? [{ type: 'Product' as const, id: res.product_id }] : [])],
+      invalidatesTags: (res) => ['Stock', 'StockMovements', 'Dashboard', { type: 'Products', id: 'LIST' }, ...(res ? [{ type: 'Product' as const, id: res.product_id }] : [])],
+    }),
+    listStockMovements: build.query<
+      Paginated<StockMovement>,
+      { product?: number; type?: StockMovementType | ''; from?: string; to?: string; page?: number; pageSize?: number }
+    >({
+      query: ({ product, type, from, to, page = 1, pageSize = 25 }) => ({
+        url: '/api/v2/vendors/stock/movements/',
+        params: { product, type: type || undefined, from: from || undefined, to: to || undefined, page, page_size: pageSize },
+      }),
+      transformResponse: (data: unknown) => normalizePage<StockMovement>(data),
+      providesTags: ['StockMovements'],
     }),
   }),
 });
 
-export const { useGetStockSummaryQuery, useListStockQuery, useUpdateStockMutation } = inventoryApi;
+export const { useGetStockSummaryQuery, useListStockQuery, useUpdateStockMutation, useListStockMovementsQuery } = inventoryApi;

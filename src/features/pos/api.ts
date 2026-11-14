@@ -18,12 +18,22 @@ export const posApi = api.injectEndpoints({
         method: 'POST',
         data: request,
         target: 'vendor',
-        // Forward-compatible: ignored by today's backend (API_MAPPING G-9).
+        // The server dedupes by this key: a retry returns the original sale instead of selling twice.
         headers: { 'Idempotency-Key': idempotencyKey },
       }),
-      invalidatesTags: ['Stock', 'Dashboard', { type: 'Products', id: 'LIST' }, { type: 'PosSales', id: 'LIST' }],
+      invalidatesTags: ['Stock', 'StockMovements', 'Dashboard', { type: 'Products', id: 'LIST' }, { type: 'PosSales', id: 'LIST' }],
+    }),
+    /** Mark a sale recorded as payment pending as paid. */
+    posConfirmPayment: build.mutation<VendorOrderFull, { orderId: number; paymentReference?: string }>({
+      query: ({ orderId, paymentReference }) => ({
+        url: `/api/v2/vendors/pos/orders/${orderId}/payment/`,
+        method: 'POST',
+        data: { payment_reference: paymentReference ?? '' },
+        target: 'vendor',
+      }),
+      invalidatesTags: (_r, _e, { orderId }) => [{ type: 'PosSales', id: 'LIST' }, { type: 'Order', id: orderId }, 'Dashboard'],
     }),
   }),
 });
 
-export const { useLazyPosLookupBarcodeQuery, usePosSearchQuery, usePosCheckoutMutation } = posApi;
+export const { useLazyPosLookupBarcodeQuery, usePosSearchQuery, usePosCheckoutMutation, usePosConfirmPaymentMutation } = posApi;

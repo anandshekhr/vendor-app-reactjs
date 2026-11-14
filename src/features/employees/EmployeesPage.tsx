@@ -1,33 +1,47 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarDays, Star, UserCog } from 'lucide-react';
-import { Badge, Button, Card, CardHeader } from '@/components/ui';
+import { CalendarDays, Pencil, Plus, Star, Trash2, UserCog } from 'lucide-react';
+import { Badge, Button, Card, CardHeader, ConfirmDialog } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { DataTable } from '@/components/tables/DataTable';
 import { EmptyState } from '@/components/feedback/EmptyState';
-import { BackendGap } from '@/components/feedback/BackendGap';
+import { useToast } from '@/hooks/useToast';
+import type { Provider } from '@/types/api';
 import { useAppSelector } from '@/hooks/store';
 import { initials } from '@/utils/format';
-import { useListProvidersQuery } from './api';
+import { useListProvidersQuery, useRemoveProviderMutation } from './api';
+import { EmployeeDialog } from './EmployeeDialog';
 
 export function EmployeesPage() {
   const shopId = useAppSelector((s) => s.auth.business?.shopId);
   const { data, isLoading, isFetching, error, refetch } = useListProvidersQuery(shopId!, { skip: !shopId });
+  const toast = useToast();
+  const [editing, setEditing] = useState<Provider | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [removing, setRemoving] = useState<Provider | null>(null);
+  const [remove, removeState] = useRemoveProviderMutation();
+  const openDialog = (p: Provider | null) => {
+    setEditing(p);
+    setDialogOpen(true);
+  };
   return (
     <>
       <PageHeader
         title="Employees"
         description="Staff who deliver your services."
         actions={
-          <Link to="/availability">
-            <Button variant="outline" leftIcon={<CalendarDays className="h-4 w-4" />}>
-              Manage availability
+          <>
+            <Link to="/availability">
+              <Button variant="outline" leftIcon={<CalendarDays className="h-4 w-4" />}>
+                Manage availability
+              </Button>
+            </Link>
+            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => openDialog(null)}>
+              Add employee
             </Button>
-          </Link>
+          </>
         }
       />
-      <BackendGap className="mb-5" gap="G-10" title="Adding, editing or deactivating employees is not available from the portal yet">
-        The provider API requires a pre-existing user account per employee and has no update/delete endpoint. Employees added during onboarding or by support appear below.
-      </BackendGap>
       <Card>
         <CardHeader title="Team" description={data ? `${data.length} employee(s)` : undefined} />
         <DataTable
@@ -77,9 +91,44 @@ export function EmployeesPage() {
               ),
             },
             { key: 'status', header: 'Status', cell: (p) => (p.is_available ? <Badge tone="success">Available</Badge> : <Badge>Unavailable</Badge>) },
+            {
+              key: 'actions',
+              header: '',
+              align: 'right',
+              cell: (p) => (
+                <div className="flex justify-end gap-1">
+                  <Button size="sm" variant="ghost" aria-label={`Edit ${p.name}`} onClick={() => openDialog(p)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button size="sm" variant="ghost" aria-label={`Remove ${p.name}`} onClick={() => setRemoving(p)}>
+                    <Trash2 className="h-4 w-4 text-red-600" />
+                  </Button>
+                </div>
+              ),
+            },
           ]}
         />
       </Card>
+      <EmployeeDialog open={dialogOpen} employee={editing} onClose={() => setDialogOpen(false)} />
+      <ConfirmDialog
+        open={Boolean(removing)}
+        onClose={() => setRemoving(null)}
+        tone="danger"
+        loading={removeState.isLoading}
+        title={removing ? `Remove ${removing.name}?` : ''}
+        description="They can no longer be assigned to bookings. Past bookings keep their name. Reassign any upcoming bookings first."
+        confirmLabel="Remove"
+        onConfirm={async () => {
+          if (!removing) return;
+          try {
+            await remove(removing.id).unwrap();
+            toast.success('Employee removed', removing.name);
+            setRemoving(null);
+          } catch (err) {
+            toast.error('Could not remove employee', err);
+          }
+        }}
+      />
     </>
   );
 }

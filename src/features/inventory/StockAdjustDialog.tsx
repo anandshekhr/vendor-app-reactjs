@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/useToast';
 import { formatNumber } from '@/utils/format';
 import type { StockUpdateResponse } from '@/types/api';
 import { useUpdateStockMutation } from './api';
-import { MOVEMENT_TYPES, movementSpec, recordJournal, validateAdjustment, type MovementType } from './movementTypes';
+import { MOVEMENT_TYPES, movementSpec, validateAdjustment, type MovementType } from './movementTypes';
 
 export interface AdjustTarget {
   id: number;
@@ -58,8 +58,14 @@ export function StockAdjustDialog({
     if (spec.reasonRequired && reason.trim().length < 3) return setError('Add a short reason for this adjustment.');
     setError(null);
     try {
-      const res = await update({ product_id: target.id, quantity: q, operation: spec.operation }).unwrap();
-      await recordJournal(res, spec, q, reason.trim(), reference.trim()).catch(() => undefined);
+      const res = await update({
+        product_id: target.id,
+        quantity: q,
+        operation: spec.operation,
+        movement_type: spec.serverType,
+        reason: reason.trim(),
+        reference: reference.trim(),
+      }).unwrap();
       setResult(res);
       onDone?.(res);
       toast.success('Stock updated', `${res.product_name}: ${res.previous_stock} → ${res.new_stock}`);
@@ -119,7 +125,7 @@ export function StockAdjustDialog({
           <Field label={spec.operation === 'set' ? 'Counted quantity' : 'Quantity'} required>
             <Input inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value.replace(/\D/g, ''))} data-autofocus />
           </Field>
-          <Field label="Reason" required={spec.reasonRequired} hint="Stored on this device only until the server keeps a stock ledger.">
+          <Field label="Reason" required={spec.reasonRequired} hint="Saved in the stock history.">
             <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} />
           </Field>
           <Field label="Reference (invoice / batch no.)">

@@ -2,9 +2,8 @@ import { api } from '@/services/api';
 import { normalizePage } from '@/services/api/pagination';
 import type { Provider, ProviderAvailability, ProviderAvailabilityResponse } from '@/types/api';
 
+/** A new or edited staff member. The server adds them to your own shop and finds or creates their login by phone. */
 export interface ProviderCreate {
-  user: number;
-  shop: number;
   full_name: string;
   phone: string;
   email: string;
@@ -25,6 +24,14 @@ export const employeesApi = api.injectEndpoints({
       query: (data) => ({ url: '/api/v2/shops/providers/create/', method: 'POST', data }),
       invalidatesTags: ['Employees', 'ServiceDashboard'],
     }),
+    updateProvider: build.mutation<Provider, { id: number } & Partial<ProviderCreate>>({
+      query: ({ id, ...data }) => ({ url: `/api/v2/shops/providers/${id}/`, method: 'PATCH', data }),
+      invalidatesTags: ['Employees'],
+    }),
+    removeProvider: build.mutation<void, number>({
+      query: (id) => ({ url: `/api/v2/shops/providers/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['Employees', 'ServiceDashboard'],
+    }),
     getProviderAvailability: build.query<ProviderAvailabilityResponse, { providerId: number; date?: string }>({
       query: ({ providerId, date }) => ({ url: `/api/v2/shops/providers/${providerId}/availability/`, params: { date } }),
       providesTags: (_r, _e, { providerId }) => [{ type: 'Employees', id: providerId }],
@@ -40,4 +47,11 @@ export const employeesApi = api.injectEndpoints({
   }),
 });
 
-export const { useListProvidersQuery, useCreateProviderMutation, useGetProviderAvailabilityQuery, useSaveProviderAvailabilityMutation } = employeesApi;
+export const {
+  useListProvidersQuery,
+  useCreateProviderMutation,
+  useUpdateProviderMutation,
+  useRemoveProviderMutation,
+  useGetProviderAvailabilityQuery,
+  useSaveProviderAvailabilityMutation,
+} = employeesApi;

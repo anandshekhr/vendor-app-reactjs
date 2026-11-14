@@ -22,7 +22,8 @@ import { runSync } from '@/features/offline-sync/useOfflineSync';
 function ServerSales() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
-  const { data, isLoading, isFetching, error, refetch } = useListVendorOrdersV2Query({ page });
+  const { data, isLoading, isFetching, error, refetch } = useListVendorOrdersV2Query({ page, source: 'pos' });
+  // The server filters by source; the client filter only guards against an older API that ignores it.
   const posRows = (data?.results ?? []).filter((o) => o.source === 'pos');
   return (
     <>
@@ -33,17 +34,16 @@ function ServerSales() {
         onRetry={refetch}
         rowKey={(o) => o.id}
         onRowClick={(o) => navigate(`/pos/sales/${o.id}`)}
-        empty={<EmptyState icon={<ReceiptIcon className="h-5 w-5" />} title="No POS sales on this page" description="Online orders on this page are hidden; use the pager to see older sales." />}
+        empty={<EmptyState icon={<ReceiptIcon className="h-5 w-5" />} title="No POS sales yet" />}
         columns={[
           { key: 'id', header: 'Receipt', cell: (o) => <span className="font-medium">#{o.id}</span> },
           { key: 'time', header: 'Date & time', cell: (o) => formatDateTime(o.created_at) },
           { key: 'customer', header: 'Customer', cell: (o) => o.customer_name || 'Walk-in', hideOnMobile: true },
           { key: 'total', header: 'Total', align: 'right', cell: (o) => formatCurrency(o.total_amount) },
-          { key: 'paid', header: 'Payment', cell: (o) => (o.is_paid ? <Badge tone="success">Paid</Badge> : <Badge tone="warning">Unpaid</Badge>), hideOnMobile: true },
+          { key: 'paid', header: 'Payment', cell: (o) => (o.is_paid ? <Badge tone="success">Paid</Badge> : <Badge tone="warning">Payment pending</Badge>), hideOnMobile: true },
         ]}
       />
       {data && <Pagination page={page} count={data.count} hasNext={Boolean(data.next)} onPageChange={setPage} />}
-      <p className="px-4 pb-3 text-xs text-ink-subtle">The server has no POS-only filter yet (API_MAPPING G-9), so each page shows the POS sales among the latest orders.</p>
     </>
   );
 }

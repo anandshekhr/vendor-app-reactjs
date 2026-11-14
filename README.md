@@ -66,7 +66,7 @@ To work without a backend, set `VITE_USE_MOCK_API=true` in `.env`. Then sign in 
 | `VITE_GOOGLE_MAPS_API_KEY` | Reserved for the delivery map (stays disabled until G-6 is fixed) |
 | `VITE_OFFLINE_PAYMENT_METHODS` | Payment methods allowed offline (default `cash`) |
 | `VITE_POS_STALE_CATALOGUE_MINUTES` | Age after which the offline catalogue is flagged stale (default 60) |
-| `VITE_POS_SERVER_IDEMPOTENCY` | Set `true` only after POS checkout honours `Idempotency-Key`. Enables automatic retry of sales whose sync outcome is unknown |
+| `VITE_POS_SERVER_IDEMPOTENCY` | Default `true`: api-services dedupes POS checkouts by `Idempotency-Key`, so sales whose outcome is unknown are retried automatically. Set `false` only against an older API |
 | `VITE_POLL_INTERVAL_MS` | Polling interval for new orders, bookings and deliveries (default 20000) |
 
 The backend must allow your portal origin in CORS (`DJANGO_CORS_EXTRA_ORIGINS`).

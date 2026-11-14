@@ -35,6 +35,8 @@ export function toCheckoutRequest(sale: OfflineSale): PosCheckoutRequest {
     customer_name: sale.customerName,
     customer_phone: sale.customerPhone,
     client_reference: sale.clientReference,
+    // The real time of the sale, not the upload time (the server accepts up to 30 days back).
+    sold_at: new Date(sale.createdAt).toISOString(),
   };
 }
 

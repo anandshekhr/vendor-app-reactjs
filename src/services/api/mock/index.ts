@@ -10,7 +10,7 @@ import { installMockAdapter } from '../client';
 import type { ApplicantApplication } from '@/types/api';
 import { createMockDb, type MockDb } from './data';
 
-type Handler = (ctx: { params: Record<string, string>; query: URLSearchParams; body: any; db: MockDb }) => [number, unknown];
+type Handler = (ctx: { params: Record<string, string>; query: URLSearchParams; body: any; db: MockDb; headers: Record<string, string> }) => [number, unknown];
 
 const PAGE = 10;
 
@@ -92,7 +92,7 @@ on('POST', '/vendor/dashboard/api/orders/:id/action/', ({ db, params, body }) =>
   const result = db.applyOrderAction(o, body.action, body.note);
   return result ? [400, { action: result }] : [200, db.orderDetail(o)];
 });
-on('GET', '/api/v2/vendors/orders/', ({ db, query }) => [200, paginate(db.orders, query)]);
+on('GET', '/api/v2/vendors/orders/', ({ db, query }) => [200, paginate(query.get('source') ? db.orders.filter((o) => o.source === query.get('source')) : db.orders, query)]);
 on('GET', '/api/v2/vendors/orders/:id/', ({ db, params }) => {
   const o = db.orders.find((x) => x.id === Number(params.id));
   return o ? [200, o] : [404, { detail: 'Not found.' }];
@@ -174,6 +174,7 @@ on('GET', '/api/v2/vendors/stock/', ({ db, query }) => {
   return [200, paginate(rows.map(db.stockItem), query)];
 });
 on('POST', '/api/v2/vendors/stock/update/', ({ db, body }) => db.updateStock(body));
+on('GET', '/api/v2/vendors/stock/movements/', ({ db, query }) => [200, paginate(db.listStockMovements(query), query, 25)]);
 
 // ─── POS ───
 on('GET', '/api/v2/vendors/pos/lookup/', ({ db, query }) => {
@@ -185,7 +186,8 @@ on('GET', '/api/v2/vendors/pos/lookup/', ({ db, query }) => {
   const q = (query.get('q') ?? '').toLowerCase();
   return [200, db.products.filter((p) => p.is_active && p.name.toLowerCase().includes(q)).slice(0, 20).map(db.posProduct)];
 });
-on('POST', '/api/v2/vendors/pos/checkout/', ({ db, body }) => db.posCheckout(body));
+on('POST', '/api/v2/vendors/pos/checkout/', ({ db, body, headers }) => db.posCheckout(body, headers['idempotency-key']));
+on('POST', '/api/v2/vendors/pos/orders/:id/payment/', ({ db, params }) => db.confirmPosPayment(Number(params.id)));
 
 // ─── Services / bookings / employees ───
 on('GET', '/vendor/dashboard/api/services/', ({ db, query }) => [200, paginate(db.shopServices.map((s) => ({ ...s, service_name: db.catalogName(s.service) })), query)]);
@@ -215,10 +217,13 @@ on('GET', '/vendor/dashboard/api/bookings/:id/', ({ db, params }) => {
 on('POST', '/vendor/dashboard/api/bookings/:id/action/', ({ db, params, body }) => {
   const b = db.bookings.find((x) => x.id === Number(params.id));
   if (!b) return [404, { detail: 'Not found.' }];
-  db.applyBookingAction(b, body);
-  return [200, db.bookingDetail(b)];
+  const problem = db.applyBookingAction(b, body);
+  return problem ? [400, problem] : [200, db.bookingDetail(b)];
 });
 on('GET', '/api/v2/shops/providers/list/', ({ db, query }) => [200, paginate(db.providers, query, 100)]);
+on('POST', '/api/v2/shops/providers/create/', ({ db, body }) => db.createProvider(body));
+on('PATCH', '/api/v2/shops/providers/:id/', ({ db, params, body }) => db.updateProvider(Number(params.id), body));
+on('DELETE', '/api/v2/shops/providers/:id/', ({ db, params }) => db.removeProvider(Number(params.id)));
 on('GET', '/api/v2/shops/providers/:id/availability/', ({ db, params, query }) => [200, db.providerAvailability(Number(params.id), query.get('date'))]);
 on('POST', '/api/v2/shops/providers/:id/availability/', ({ db, params, body }) => {
   db.availability[Number(params.id)] = body.provider_availability.map((r: any, i: number) => ({ id: i + 1, ...r }));
@@ -240,7 +245,7 @@ on('GET', '/api/v2/vendors/withdrawals/:id/', ({ db, params }) => {
   const w = db.withdrawals.find((x) => x.id === Number(params.id));
   return w ? [200, w] : [404, { detail: 'Not found.' }];
 });
-on('POST', '/api/v2/vendors/withdrawals/', ({ db, body }) => db.createWithdrawal(body));
+on('POST', '/api/v2/vendors/withdrawals/', ({ db, body, headers }) => db.createWithdrawal(body, headers['idempotency-key']));
 
 // ─── Chat ───
 on('GET', '/api/v2/chat/conversations/', ({ db, query }) => [200, paginate(db.threadList(), query, 20)]);
@@ -369,7 +374,11 @@ export function createMockAdapter(db: MockDb = createMockDb()) {
       if (m !== method) continue;
       const params = match(pattern, path);
       if (!params) continue;
-      const [status, raw] = handler({ params, query, body, db });
+      const headers: Record<string, string> = {};
+      Object.entries(AxiosHeaders.from(config.headers as never).toJSON()).forEach(([k, v]) => {
+        if (v !== undefined && v !== null) headers[k.toLowerCase()] = String(v);
+      });
+      const [status, raw] = handler({ params, query, body, db, headers });
       // Clone so the store's frozen copies never alias the mock's mutable records.
       const data = raw === null || raw === undefined ? raw : structuredClone(raw);
       const response: AxiosResponse = { data, status, statusText: String(status), headers: {}, config: { ...config, headers: config.headers ?? new AxiosHeaders() } };

@@ -428,6 +428,29 @@ export interface StockUpdateResponse {
   previous_stock: number;
   new_stock: number;
   change: number;
+  /** The stock-history row the server recorded for this change. */
+  movement_id?: number;
+}
+
+/** Server-side stock movement types (products.StockMovement). */
+export type StockMovementType = 'restock' | 'sale' | 'damaged' | 'expired' | 'returned' | 'correction' | 'other';
+
+/** One row of the server's stock history: GET /api/v2/vendors/stock/movements/ */
+export interface StockMovement {
+  id: number;
+  product_id: number;
+  product_name: string;
+  movement_type: StockMovementType;
+  operation: StockOperation;
+  quantity: number;
+  delta: number;
+  quantity_before: number;
+  quantity_after: number;
+  reason: string;
+  reference: string;
+  actor_name: string;
+  vendor_order_id: number | null;
+  created_at: ISODateTime;
 }
 
 // ─── POS ─────────────────────────────────────────────────────────────────────
@@ -452,8 +475,16 @@ export interface PosCheckoutRequest {
   payment_method: PosPaymentMethod;
   customer_name: string;
   customer_phone: string;
-  /** Sent for forward compatibility with server-side idempotency (API_MAPPING G-9); ignored today. */
+  /** Idempotency key (also sent as the Idempotency-Key header): a retry returns the original sale. */
   client_reference?: string;
+  /** When the sale happened -- set for sales recorded offline and uploaded later. */
+  sold_at?: ISODateTime;
+  /** Flat discount on the bill; checked by the server against the item total. */
+  discount_amount?: string;
+  /** `pending` = money not collected yet; confirm later with POST /api/v2/vendors/pos/orders/<id>/payment/. */
+  payment_status?: 'paid' | 'pending';
+  /** UPI transaction id / card slip number. */
+  payment_reference?: string;
 }
 
 // ─── Services / bookings / employees ────────────────────────────────────────
@@ -509,10 +540,16 @@ export interface BookingListItem {
   payment_status: PaymentStatus;
   payment_status_display: string;
   balance_due: Decimal;
+  /** Set once the shop accepts the booking (status stays SCHEDULED). */
+  vendor_confirmed_at?: ISODateTime | null;
 }
 
 export interface BookingDetail extends Omit<BookingListItem, 'balance_due'>, ContactPrivacy {
   end_time: ISODateTime;
+  provider_id?: number | null;
+  cancellation_reason?: string;
+  /** What the shop can do next, decided by the server's status rules. */
+  allowed_actions?: BookingAction[];
   amount_paid: Decimal;
   amount_due: Decimal;
   created_at: ISODateTime;
@@ -537,11 +574,13 @@ export interface BookingDetail extends Omit<BookingListItem, 'balance_due'>, Con
   } | null;
 }
 
-export type BookingAction = 'start' | 'complete' | 'cancel' | 'reschedule' | 'collect_balance';
+export type BookingAction = 'accept' | 'reject' | 'start' | 'complete' | 'cancel' | 'assign' | 'reschedule' | 'collect_balance';
 
 export interface Provider {
   id: number;
   name: string;
+  full_name?: string;
+  email?: string;
   profile_image: string | null;
   role: string;
   shop: number;

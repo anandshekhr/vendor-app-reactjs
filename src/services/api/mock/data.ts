@@ -1,6 +1,8 @@
 /* Development-only fixture data for the mock API. Shapes follow the Django serializers. */
+import { allowedBookingActions } from '@/features/bookings/transitions';
 import type {
   ApplicantApplication,
+  StockMovement,
   StarterProductSelection,
   BankAccount,
   BookingListItem,
@@ -200,6 +202,32 @@ export function createMockDb() {
     created_at: iso(i * 300),
   }));
 
+  const bookingAllowedActions = (b: Booking) => allowedBookingActions(b.status, b.payment_status, Boolean(b.vendor_confirmed_at));
+  const stockMovements: StockMovement[] = [];
+  const recordMovement = (p: { id: number; name: string }, type: StockMovement['movement_type'], operation: StockMovement['operation'], quantity: number, before: number, after: number, extra: Partial<StockMovement> = {}) => {
+    const m: StockMovement = {
+      id: stockMovements.length + 1,
+      product_id: p.id,
+      product_name: p.name,
+      movement_type: type,
+      operation,
+      quantity,
+      delta: after - before,
+      quantity_before: before,
+      quantity_after: after,
+      reason: '',
+      reference: '',
+      actor_name: 'Ramesh Sharma',
+      vendor_order_id: null,
+      created_at: new Date().toISOString(),
+      ...extra,
+    };
+    stockMovements.unshift(m);
+    return m;
+  };
+  const posKeys = new Map<string, number>();
+  const withdrawalKeys = new Map<string, number>();
+
   let balance = 12450.5;
   const transactions: WalletTransaction[] = Array.from({ length: 14 }, (_, i) => ({
     id: 900 - i,
@@ -322,6 +350,7 @@ export function createMockDb() {
     providers,
     availability,
     bookings,
+    stockMovements,
     transactions,
     get bankAccounts() {
       return bankAccounts;
@@ -508,7 +537,18 @@ export function createMockDb() {
         if (p.stock - body.quantity < 0) return [400, { error: `Cannot subtract ${body.quantity} from current stock ${p.stock}` }];
         p.stock -= body.quantity;
       }
-      return [200, { message: 'Stock updated successfully', product_id: p.id, product_name: p.name, previous_stock: prev, new_stock: p.stock, change: p.stock - prev }];
+      const type = body.movement_type ?? (body.operation === 'add' ? 'restock' : body.operation === 'set' ? 'correction' : 'other');
+      const m = recordMovement(p, type, body.operation, body.quantity, prev, p.stock, { reason: body.reason ?? '', reference: body.reference ?? '' });
+      return [200, { message: 'Stock updated successfully', product_id: p.id, product_name: p.name, previous_stock: prev, new_stock: p.stock, change: p.stock - prev, movement_id: m.id }];
+    },
+    listStockMovements(query: URLSearchParams) {
+      return stockMovements.filter(
+        (m) =>
+          (!query.get('product') || m.product_id === Number(query.get('product'))) &&
+          (!query.get('type') || m.movement_type === query.get('type')) &&
+          (!query.get('from') || m.created_at.slice(0, 10) >= query.get('from')!) &&
+          (!query.get('to') || m.created_at.slice(0, 10) <= query.get('to')!),
+      );
     },
     stockSummary: () => ({
       summary: {
@@ -520,7 +560,12 @@ export function createMockDb() {
       },
       low_stock_products: products.filter((p) => p.stock <= 10).sort((a, b) => a.stock - b.stock).slice(0, 10).map((p) => ({ id: p.id, name: p.name, stock: p.stock, barcode: p.barcode })),
     }),
-    posCheckout(body: any): [number, unknown] {
+    posCheckout(body: any, key?: string): [number, unknown] {
+      const ref = key || body.client_reference || '';
+      if (ref && posKeys.has(ref)) {
+        const existing = orders.find((o) => o.id === posKeys.get(ref));
+        if (existing) return [200, { ...existing, replayed: true }];
+      }
       const qty = new Map<number, number>();
       for (const it of body.items) qty.set(it.product_id, (qty.get(it.product_id) ?? 0) + it.quantity);
       for (const [id, q] of qty) {
@@ -528,14 +573,20 @@ export function createMockDb() {
         if (!p) return [400, { items: `Unknown product id(s): ${id}` }];
         if (p.stock < q) return [400, { items: `Insufficient stock for "${p.name}" (available: ${p.stock}).` }];
       }
+      const orderId = Math.max(...orders.map((o) => o.id)) + 1;
       const items = [...qty].map(([id, q], i) => {
         const p = products.find((x) => x.id === id)!;
+        recordMovement(p, 'sale', 'subtract', q, p.stock, p.stock - q, { reference: `POS order #${orderId}`, vendor_order_id: orderId });
         p.stock -= q;
         return { id: Date.now() + i, order: 0, product: id, product_snapshot: { id, name: p.name, sku: p.sku }, quantity: q, unit_price: finalPrice(p).toFixed(2), line_total: (finalPrice(p) * q).toFixed(2) };
       });
-      const total = items.reduce((s, i) => s + Number(i.line_total), 0).toFixed(2);
+      const itemTotal = items.reduce((s, i) => s + Number(i.line_total), 0);
+      const discount = Number(body.discount_amount ?? 0);
+      if (discount > itemTotal) return [400, { discount_amount: ['Discount cannot be more than the bill.'] }];
+      const total = (itemTotal - discount).toFixed(2);
+      const soldAt = body.sold_at ?? new Date().toISOString();
       const order: VendorOrderFull = {
-        id: Math.max(...orders.map((o) => o.id)) + 1,
+        id: orderId,
         order: null,
         vendor: 1,
         shop: 1,
@@ -543,8 +594,8 @@ export function createMockDb() {
         customer_name: body.customer_name ?? '',
         customer_phone: body.customer_phone ?? '',
         customer_address: null,
-        item_total: total,
-        discount_amount: '0.00',
+        item_total: itemTotal.toFixed(2),
+        discount_amount: discount.toFixed(2),
         tax_amount: '0.00',
         total_amount: total,
         status: 'delivered',
@@ -552,12 +603,12 @@ export function createMockDb() {
         source: 'pos',
         invoice_token: crypto.randomUUID(),
         invoice_url: undefined,
-        is_paid: true,
+        is_paid: body.payment_status !== 'pending',
         accepted_at: null,
         rejected_at: null,
         ready_at: null,
         out_for_delivery_at: null,
-        delivered_at: new Date().toISOString(),
+        delivered_at: soldAt,
         cancelled_at: null,
         rejection_reason: '',
         created_at: new Date().toISOString(),
@@ -565,7 +616,14 @@ export function createMockDb() {
         items,
       };
       orders.unshift(order);
-      return [201, order];
+      if (ref) posKeys.set(ref, order.id);
+      return [201, { ...order, replayed: false }];
+    },
+    confirmPosPayment(id: number): [number, unknown] {
+      const o = orders.find((x) => x.id === id && x.source === 'pos');
+      if (!o) return [404, { detail: 'Not found.' }];
+      o.is_paid = true;
+      return [201, o];
     },
     dashboard() {
       const delivered = orders.filter((o) => o.status === 'delivered');
@@ -606,18 +664,74 @@ export function createMockDb() {
     }),
     bookingDetail: (b: Booking) => ({
       ...b,
+      allowed_actions: bookingAllowedActions(b),
       amount_paid: b.payment_status === 'PAID' ? b.total_amount : b.booking_amount,
       amount_due: b.payment_status === 'PAID' ? '0.00' : (Number(b.total_amount) - Number(b.booking_amount)).toFixed(2),
       payment_detail: null,
       service_detail: { id: 1, service_id: 'svc-1', name: b.service_name, category_name: 'Salon', service_type: 'ON_SITE', pricing_type: 'FIXED', base_price: b.total_amount, estimated_duration_minutes: 60 },
     }),
-    applyBookingAction(b: Booking, body: any) {
+    /** Mirrors apps.services.booking_flow: returns an error body when the server would refuse. */
+    applyBookingAction(b: Booking, body: any): Record<string, string> | null {
+      const open = b.status === 'SCHEDULED' || b.status === 'IN_PROGRESS';
+      const allowed = bookingAllowedActions(b);
+      if (!allowed.includes(body.action)) return { action: `A ${b.status.toLowerCase().replace('_', ' ')} booking cannot do "${body.action}".` };
+      if ((body.action === 'reject' || body.action === 'cancel') && !(body.reason ?? '').trim()) return { reason: 'Tell the customer why.' };
+      if (body.action === 'accept') b.vendor_confirmed_at = new Date().toISOString();
       if (body.action === 'start') b.status = 'IN_PROGRESS';
       if (body.action === 'complete') b.status = 'COMPLETED';
-      if (body.action === 'cancel') b.status = 'CANCELLED';
+      if (body.action === 'reject' || body.action === 'cancel') {
+        b.status = 'CANCELLED';
+        (b as any).cancellation_reason = body.reason;
+      }
       if (body.action === 'collect_balance') b.payment_status = 'PAID';
+      if (body.action === 'assign' && open) {
+        const p = providers.find((x) => x.id === Number(body.provider_id));
+        if (!p) return { provider_id: 'Choose a staff member of this shop.' };
+        b.staff = p.name;
+        (b as any).provider_id = p.id;
+      }
       if (body.action === 'reschedule') Object.assign(b, { start_time: body.start_time, end_time: body.end_time });
       b.status_display = b.status.replace('_', ' ').toLowerCase();
+      return null;
+    },
+    createProvider(body: any): [number, unknown] {
+      const digits = String(body.phone ?? '').replace(/\D/g, '');
+      if (digits.length < 10) return [400, { phone: ['Enter a valid 10-digit mobile number.'] }];
+      if (providers.some((p) => p.phone.replace(/\D/g, '').endsWith(digits.slice(-10)))) return [400, { phone: ['This number is already a staff member of your shop.'] }];
+      const p: Provider = {
+        id: Math.max(0, ...providers.map((x) => x.id)) + 1,
+        name: body.full_name,
+        full_name: body.full_name,
+        email: body.email,
+        profile_image: null,
+        role: body.role ?? '',
+        shop: 1,
+        phone: `+91${digits.slice(-10)}`,
+        specialties: body.specialties ?? '',
+        specializations: (body.specialties ?? '').split(',').map((x: string) => x.trim()).filter(Boolean),
+        rating: '0.00',
+        review_count: 0,
+        experience_years: Number(body.experience_years ?? 0),
+        is_available: body.is_available ?? true,
+      };
+      providers.push(p);
+      return [201, p];
+    },
+    updateProvider(id: number, body: any): [number, unknown] {
+      const p = providers.find((x) => x.id === id);
+      if (!p) return [404, { detail: 'Not found.' }];
+      Object.assign(p, body);
+      if (body.full_name) p.name = body.full_name;
+      if (body.specialties !== undefined) p.specializations = String(body.specialties).split(',').map((x) => x.trim()).filter(Boolean);
+      return [200, p];
+    },
+    removeProvider(id: number): [number, unknown] {
+      const i = providers.findIndex((x) => x.id === id);
+      if (i < 0) return [404, { detail: 'Not found.' }];
+      const busy = bookings.some((b) => (b.status === 'SCHEDULED' || b.status === 'IN_PROGRESS') && b.staff === providers[i].name && new Date(b.end_time).getTime() > Date.now());
+      if (busy) return [400, { detail: `${providers[i].name} still has upcoming bookings. Reassign them first.` }];
+      providers.splice(i, 1);
+      return [204, null];
     },
     providerAvailability: (id: number, date: string | null) => {
       const availabilityRows = availability[id] ?? [];
@@ -737,12 +851,17 @@ export function createMockDb() {
       }
       return ids;
     },
-    createWithdrawal(body: any): [number, unknown] {
+    createWithdrawal(body: any, key?: string): [number, unknown] {
+      if (key && withdrawalKeys.has(key)) {
+        const existing = withdrawals.find((w) => w.id === withdrawalKeys.get(key));
+        if (existing) return [200, existing];
+      }
       const amount = Number(body.amount);
       if (amount < 100) return [400, { amount: ['Ensure this value is greater than or equal to 100.'] }];
-      if (amount > balance) return [400, { amount: ['Insufficient balance'] }];
+      if (amount > balance - db.pendingWithdrawals()) return [409, { detail: 'Amount exceeds your available wallet balance.' }];
       const acct = bankAccounts.find((a) => a.id === body.bank_account_id);
-      if (!acct) return [400, { bank_account_id: ['Invalid bank account'] }];
+      if (!acct) return [400, { bank_account: ['Invalid bank account.'] }];
+      if (!acct.is_verified) return [400, { bank_account: ['This bank account has not been verified yet.'] }];
       const w: Withdrawal = {
         id: Math.max(...withdrawals.map((x) => x.id)) + 1,
         amount: amount.toFixed(2),
@@ -757,6 +876,7 @@ export function createMockDb() {
         processed_at: null,
       };
       withdrawals.unshift(w);
+      if (key) withdrawalKeys.set(key, w.id);
       return [201, w];
     },
   };

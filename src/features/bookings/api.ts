@@ -16,7 +16,7 @@ export const bookingsApi = api.injectEndpoints({
       query: (id) => `/vendor/dashboard/api/bookings/${id}/`,
       providesTags: (_r, _e, id) => [{ type: 'Bookings', id }],
     }),
-    bookingAction: build.mutation<BookingDetail, { id: number; action: BookingAction; start_time?: string; end_time?: string }>({
+    bookingAction: build.mutation<BookingDetail, { id: number; action: BookingAction; start_time?: string; end_time?: string; reason?: string; provider_id?: number }>({
       query: ({ id, ...data }) => ({ url: `/vendor/dashboard/api/bookings/${id}/action/`, method: 'POST', data }),
       invalidatesTags: (_r, _e, { id }) => [{ type: 'Bookings', id }, { type: 'Bookings', id: 'LIST' }, 'ServiceDashboard'],
     }),

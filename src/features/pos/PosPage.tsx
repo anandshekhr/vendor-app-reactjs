@@ -20,6 +20,7 @@ import { EmptyState } from '@/components/feedback/EmptyState';
 import { BackendGap } from '@/components/feedback/BackendGap';
 import { useAppDispatch, useAppSelector } from '@/hooks/store';
 import { useDebounce } from '@/hooks/useDebounce';
+import { config } from '@/constants/config';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useToast } from '@/hooks/useToast';
@@ -77,6 +78,10 @@ export function PosPage() {
   const [category, setCategory] = useState<string>('');
   const [syncing, setSyncing] = useState(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  // Non-cash sale whose money hasn't arrived yet (or a credit sale): recorded as payment pending.
+  const [payLater, setPayLater] = useState(false);
+  const [paymentReference, setPaymentReference] = useState('');
+  const [discount, setDiscount] = useState('');
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [ambiguous, setAmbiguous] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
@@ -100,20 +105,32 @@ export function PosPage() {
   );
 
   const stale = isCatalogueStale(catalogueSyncedAt);
-  const total = estimateTotal(cart.lines);
+  const itemsTotal = estimateTotal(cart.lines);
+  const discountValue = online ? Math.max(0, Number(discount) || 0) : 0;
+  const discountInvalid = discountValue > itemsTotal;
+  const total = Math.max(0, itemsTotal - discountValue);
   const count = itemCount(cart.lines);
   const methodNeedsConfirmation = cart.paymentMethod !== 'cash';
   const offlineMethodBlocked = !online && !isOfflinePaymentAllowed(cart.paymentMethod);
   const phoneInvalid = cart.customerPhone.trim() !== '' && !isValidIndianMobile(cart.customerPhone);
 
+  // A new key whenever the sale itself changes; an unchanged retry keeps its key, so the server can dedupe it.
   useEffect(() => {
     idempotencyKey.current = uuid();
     setAmbiguous(false);
-  }, [cart.lines, cart.paymentMethod]);
+  }, [cart.lines, cart.paymentMethod, discount, payLater]);
 
   useEffect(() => {
     setPaymentConfirmed(false);
   }, [cart.paymentMethod, total]);
+
+  useEffect(() => {
+    if (cart.lines.length === 0) {
+      setDiscount('');
+      setPayLater(false);
+      setPaymentReference('');
+    }
+  }, [cart.lines.length]);
 
   const syncCatalogue = useCallback(async () => {
     if (!navigator.onLine) return;
@@ -174,6 +191,9 @@ export function PosPage() {
           customer_name: cart.customerName.trim(),
           customer_phone: cart.customerPhone.trim() ? normalizeIndianMobile(cart.customerPhone) : '',
           client_reference: idempotencyKey.current,
+          discount_amount: discountValue ? discountValue.toFixed(2) : undefined,
+          payment_status: payLater ? 'pending' : 'paid',
+          payment_reference: paymentReference.trim() || undefined,
         },
         idempotencyKey: idempotencyKey.current,
       }).unwrap();
@@ -202,7 +222,8 @@ export function PosPage() {
       if (e?.isNetworkError && !e.isAmbiguous) {
         toast.warning('You went offline', 'Record the sale offline or try again when connected.');
       } else if (e && (e.isAmbiguous || e.status === null || (e.status ?? 0) >= 500)) {
-        // The request may have been processed. Never auto-retry a non-idempotent checkout.
+        // The request may have been processed. With server idempotency the same key makes a retry safe;
+        // otherwise the cashier must check the sales history first.
         setAmbiguous(true);
       } else {
         toast.error('Checkout rejected', err);
@@ -242,7 +263,8 @@ export function PosPage() {
     }
   };
 
-  const canCheckout = cart.lines.length > 0 && !phoneInvalid && !offlineMethodBlocked && (!methodNeedsConfirmation || paymentConfirmed || !online);
+  const canCheckout =
+    cart.lines.length > 0 && !phoneInvalid && !offlineMethodBlocked && !discountInvalid && (!methodNeedsConfirmation || paymentConfirmed || payLater || !online);
 
   const cartPanel = (
     <div className="flex h-full flex-col">
@@ -331,38 +353,80 @@ export function PosPage() {
             ))}
           </Select>
         </Field>
-        {online && methodNeedsConfirmation && cart.lines.length > 0 && (
-          <label className="flex items-start gap-2 rounded-md bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
-            <Checkbox checked={paymentConfirmed} onChange={(e) => setPaymentConfirmed(e.target.checked)} className="mt-0.5" />
-            I have confirmed {formatCurrency(total)} was received on the {cart.paymentMethod.toUpperCase()} terminal/app. (The server records POS sales as paid without a provider check.)
-          </label>
+        {online && cart.lines.length > 0 && (
+          <div className="space-y-2">
+            {methodNeedsConfirmation && !payLater && (
+              <label className="flex items-start gap-2 rounded-md bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+                <Checkbox checked={paymentConfirmed} onChange={(e) => setPaymentConfirmed(e.target.checked)} className="mt-0.5" />
+                I have seen {formatCurrency(total)} received on the {cart.paymentMethod.toUpperCase()} terminal/app.
+              </label>
+            )}
+            <label className="flex items-center gap-2 text-xs text-ink-muted">
+              <Checkbox checked={payLater} onChange={(e) => setPayLater(e.target.checked)} />
+              Not paid yet — record as payment pending (mark paid later from the sale)
+            </label>
+            {methodNeedsConfirmation && (
+              <Input
+                aria-label="Payment reference"
+                placeholder={cart.paymentMethod === 'upi' ? 'UPI transaction ID (optional)' : 'Card slip number (optional)'}
+                value={paymentReference}
+                onChange={(e) => setPaymentReference(e.target.value)}
+                maxLength={200}
+              />
+            )}
+          </div>
         )}
         <dl className="space-y-1 text-sm">
           <div className="flex justify-between text-ink-muted">
-            <dt>Discount</dt>
-            <dd>Not supported at POS</dd>
+            <dt>Items</dt>
+            <dd className="tabular">{formatCurrency(itemsTotal)}</dd>
           </div>
+          <div className="flex items-center justify-between gap-3 text-ink-muted">
+            <dt>Discount (₹)</dt>
+            <dd>
+              {online ? (
+                <Input
+                  // The cart renders twice (desktop panel + mobile drawer), so no shared id/htmlFor here.
+                  aria-label="Discount (₹)"
+                  inputMode="decimal"
+                  className="h-8 w-28 text-right"
+                  value={discount}
+                  aria-invalid={discountInvalid || undefined}
+                  onChange={(e) => setDiscount(e.target.value.replace(/[^\d.]/g, ''))}
+                  placeholder="0"
+                />
+              ) : (
+                <span className="text-xs">Online only</span>
+              )}
+            </dd>
+          </div>
+          {discountInvalid && <p className="text-xs text-red-600">The discount can't be more than the bill.</p>}
           <div className="flex justify-between text-ink-muted">
             <dt>Tax</dt>
             <dd>Calculated by server</dd>
           </div>
           <div className="flex justify-between text-base font-semibold">
-            <dt>Estimated total</dt>
+            <dt>{discountValue ? 'Total after discount' : 'Estimated total'}</dt>
             <dd className="tabular">{formatCurrency(total)}</dd>
           </div>
         </dl>
-        {ambiguous && (
-          <div role="alert" className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
-            The server did not respond, so we cannot tell whether this sale was saved.{' '}
-            <Link to="/pos/sales" className="font-semibold underline">
-              Check sales history
-            </Link>{' '}
-            before trying again, to avoid a duplicate sale.
-          </div>
-        )}
+        {ambiguous &&
+          (config.posServerIdempotency ? (
+            <div role="alert" className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+              The server did not respond. Retrying is safe: it uses the same sale reference, so the sale is recorded only once.
+            </div>
+          ) : (
+            <div role="alert" className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+              The server did not respond, so we cannot tell whether this sale was saved.{' '}
+              <Link to="/pos/sales" className="font-semibold underline">
+                Check sales history
+              </Link>{' '}
+              before trying again, to avoid a duplicate sale.
+            </div>
+          ))}
         {online ? (
           <Button size="lg" className="w-full" disabled={!canCheckout} loading={checkoutState.isLoading} onClick={completeOnline}>
-            {ambiguous ? 'Retry checkout anyway' : `Charge ${formatCurrency(total)}`}
+            {ambiguous ? (config.posServerIdempotency ? 'Retry checkout' : 'Retry checkout anyway') : `Charge ${formatCurrency(total)}`}
           </Button>
         ) : (
           <Button size="lg" className="w-full" disabled={!canCheckout} onClick={completeOffline} leftIcon={<CloudOff className="h-4 w-4" />}>

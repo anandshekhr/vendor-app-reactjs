@@ -4,7 +4,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CheckCircle2, ShieldAlert } from 'lucide-react';
 import { Button, Dialog, Field, Input, Select, Skeleton, Textarea } from '@/components/ui';
-import { BackendGap } from '@/components/feedback/BackendGap';
 import { StatusBadge } from '@/components/feedback/StatusBadge';
 import { useToast } from '@/hooks/useToast';
 import { isApiError } from '@/services/api/errors';
@@ -57,7 +56,8 @@ export function NewWithdrawalDialog({ open, onClose }: { open: boolean; onClose:
       setStep('done');
     } catch (err) {
       if (isApiError(err) && (err.isAmbiguous || (err.status ?? 0) >= 500)) {
-        // Do not offer an immediate retry: the request may have been accepted (no server idempotency — G-11).
+        // The request may have been accepted. Retrying with the same Idempotency-Key is safe: the server returns
+        // the original request instead of creating a second one.
         setStep('uncertain');
       } else {
         toast.error('Withdrawal request rejected', err);
@@ -90,6 +90,15 @@ export function NewWithdrawalDialog({ open, onClose }: { open: boolean; onClose:
             </Button>
             <Button onClick={submit} loading={isLoading}>
               Confirm withdrawal
+            </Button>
+          </>
+        ) : step === 'uncertain' ? (
+          <>
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
+            <Button onClick={submit} loading={isLoading}>
+              Try again
             </Button>
           </>
         ) : (
@@ -156,9 +165,9 @@ export function NewWithdrawalDialog({ open, onClose }: { open: boolean; onClose:
             <dt className="text-ink-muted">Account holder</dt>
             <dd>{selectedAccount?.account_holder_name}</dd>
           </div>
-          <BackendGap gap="G-11" title="The net payout is confirmed by the finance team">
-            The server does not publish fees or reserve the amount at request time; the request is reviewed before payment.
-          </BackendGap>
+          <p className="text-xs text-ink-muted">
+            The amount is reserved from your available balance until the finance team pays it out or rejects the request.
+          </p>
         </dl>
       ) : step === 'done' && result ? (
         <div className="space-y-3 text-center" role="status">
@@ -172,7 +181,7 @@ export function NewWithdrawalDialog({ open, onClose }: { open: boolean; onClose:
       ) : (
         <div className="space-y-2 text-sm" role="alert">
           <p className="font-medium">We could not confirm whether your request was received.</p>
-          <p className="text-ink-muted">To avoid a duplicate withdrawal, check your withdrawal history before submitting again.</p>
+          <p className="text-ink-muted">Trying again is safe: it re-sends the same request, so it can never be paid out twice.</p>
           <Link to="/wallet/withdrawals" onClick={onClose} className="font-semibold text-brand-700 underline">
             Open withdrawal history
           </Link>
