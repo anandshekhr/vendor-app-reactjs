@@ -23,15 +23,19 @@ ARG VITE_POS_STALE_CATALOGUE_MINUTES=60
 ARG VITE_POS_SERVER_IDEMPOTENCY=false
 ARG VITE_POLL_INTERVAL_MS=20000
 ARG APP_VERSION=dev
+ARG GIT_COMMIT=unknown
+# Shown at the bottom of the sidebar, so you can tell which release is on screen.
+ENV VITE_APP_VERSION=$APP_VERSION
 RUN test -n "$VITE_API_BASE_URL" || (echo "VITE_API_BASE_URL build arg is required" && exit 1)
 RUN test "$VITE_USE_MOCK_API" != "true" || (echo "Refusing to build a deployable image with the mock API" && exit 1)
 RUN npm run build \
- && printf '{"version":"%s","api":"%s"}\n' "$APP_VERSION" "$VITE_API_BASE_URL" > dist/version.json
+ && printf '{"version":"%s","api":"%s","commit":"%s","built":"%s"}\n' "$APP_VERSION" "$VITE_API_BASE_URL" "$GIT_COMMIT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > dist/version.json
 
 # ---- serve ----
 FROM nginx:1.27-alpine
 ARG APP_VERSION=dev
-LABEL org.opencontainers.image.title="tnbs-vendor-portal" org.opencontainers.image.version="$APP_VERSION"
+ARG GIT_COMMIT=unknown
+LABEL org.opencontainers.image.title="tnbs-vendor-portal" org.opencontainers.image.version="$APP_VERSION" org.opencontainers.image.revision="$GIT_COMMIT"
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 # Source maps stay out of the public image (they'd publish the original source).

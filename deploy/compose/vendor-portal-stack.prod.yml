@@ -13,7 +13,10 @@ services:
       args:
         VITE_API_BASE_URL: https://api.thenearbyshop.com
         APP_VERSION: ${APP_VERSION:-unknown}
-    image: tnbs-vendor-portal:production
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+    # Jenkins names each build tnbs-vendor-portal:prod-<version> and keeps the newest five, so
+    # ACTION=rollback can start an earlier one without rebuilding.
+    image: ${PORTAL_IMAGE:-tnbs-vendor-portal:production}
     container_name: vendor_portal_prod
     restart: unless-stopped
     expose:

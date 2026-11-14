@@ -5,6 +5,16 @@
 // `webnet` network, where the edge nginx (api-services edge-stack) reaches it as vendor-portal:8080.
 // Nothing here touches the edge: pointing the domain at this container is the api-services edge
 // job's change (deploy/nginx/api-stage.conf).
+//
+// Versioning (same scheme as api-services' Jenkinsfile.api and the admin / BDE portals, https://semver.org):
+//   - VERSION holds MAJOR.MINOR.PATCH. Bump MAJOR/MINOR by hand for bigger releases.
+//   - Leave DEPLOY_VERSION blank and every build gets MAJOR.MINOR.<BUILD_NUMBER>, e.g. 1.0.27 (production
+//     included). Or type one (v1.4.2, or v1.4.2-rc.1 for staging only; production needs a clean MAJOR.MINOR.PATCH).
+//   - The version is baked into the image (image label, /version.json with the commit, and the sidebar footer),
+//     names the image (tnbs-vendor-portal:staging-<v> / :prod-<v>) and the Jenkins build, and a version that is
+//     already deployed in that environment cannot be released again.
+//   - The newest five images per environment are kept, so ACTION=rollback with DEPLOY_VERSION=<v> brings one
+//     back in seconds (no build, no tests). Leave DEPLOY_VERSION blank to list what can be rolled back to.
 pipeline {
     agent {
         node {
@@ -21,9 +31,14 @@ pipeline {
 
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['staging', 'production'],
-            description: 'Staging builds against staging-api.thenearbyshop.com; production against api.thenearbyshop.com and must run from main with a release version and a manual confirmation.')
+            description: 'Staging builds against staging-api.thenearbyshop.com; production against api.thenearbyshop.com, must run from main and asks for confirmation.')
+        choice(name: 'ACTION', choices: ['release', 'rollback'],
+            description: '''release = test, build and deploy this commit as a new version. (Default.)
+rollback = redeploy an earlier version that is still on this server, without building or testing. Set DEPLOY_VERSION, or leave it blank to list the versions available.''')
         string(name: 'DEPLOY_VERSION', defaultValue: '',
-            description: 'SemVer, e.g. v1.4.2 or v1.4.2-rc.1. Blank = VERSION file + build metadata. Required (clean MAJOR.MINOR.PATCH) for production.')
+            description: 'Blank = generated MAJOR.MINOR.<build number> from the VERSION file (e.g. 1.0.27). Or SemVer such as v1.4.2 / v1.4.2-rc.1 (production: clean MAJOR.MINOR.PATCH only). ACTION=rollback: the version to bring back.')
+        text(name: 'RELEASE_NOTES', defaultValue: '',
+            description: 'Optional: what this release contains. Shown on the build page and in the production confirmation.')
         booleanParam(name: 'RUN_TESTS', defaultValue: true,
             description: 'Typecheck and unit tests (inside Docker) before deploying.')
         booleanParam(name: 'RUN_SMOKE_TEST', defaultValue: true,
@@ -55,9 +70,6 @@ pipeline {
                         if (env.DEPLOY_BRANCH != 'main') {
                             error("Production deploys must run from main (this build is on '${env.DEPLOY_BRANCH ?: 'an unknown branch'}').")
                         }
-                        if (!params.DEPLOY_VERSION?.trim()) {
-                            error('DEPLOY_VERSION is required for production (e.g. v1.4.2).')
-                        }
                         env.COMPOSE_FILE = 'deploy/compose/vendor-portal-stack.prod.yml'
                         env.SERVICE = 'vendor-portal-prod'
                         env.CONTAINER = 'vendor_portal_prod'
@@ -68,6 +80,7 @@ pipeline {
                         env.CONTAINER = 'vendor_portal'
                         env.EXPECTED_API = 'https://staging-api.thenearbyshop.com'
                     }
+                    env.ROLLBACK = (params.ACTION == 'rollback').toString()
                 }
             }
         }
@@ -77,22 +90,72 @@ pipeline {
                 script {
                     def releasePattern = /^v?\d+\.\d+\.\d+$/
                     def fullSemverPattern = /^v?\d+\.\d+\.\d+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$/
-                    if (params.DEPLOY_VERSION?.trim()) {
-                        def requested = params.DEPLOY_VERSION.trim()
+                    def requested = params.DEPLOY_VERSION?.trim()
+                    env.GIT_SHORT_SHA = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    if (requested) {
                         if (!(requested ==~ fullSemverPattern)) {
-                            error("DEPLOY_VERSION '${requested}' is not valid SemVer (e.g. v1.4.2 or v1.4.2-rc.1).")
+                            error("DEPLOY_VERSION '${requested}' is not valid SemVer (e.g. v1.4.2 or v1.4.2-rc.1). See https://semver.org.")
                         }
                         if (env.TARGET_ENV == 'production' && !(requested ==~ releasePattern)) {
                             error("Production requires a clean MAJOR.MINOR.PATCH version, got '${requested}'.")
                         }
                         env.APP_VERSION = requested
+                    } else if (env.ROLLBACK == 'true') {
+                        env.APP_VERSION = ''
                     } else {
+                        // MAJOR.MINOR from VERSION + this job's build number as PATCH, e.g. 1.0.27.
                         def baseVersion = readFile('VERSION').trim()
-                        def shortSha = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-                        env.APP_VERSION = "${baseVersion}+build.${env.BUILD_NUMBER}.${shortSha}"
+                        if (!(baseVersion ==~ releasePattern)) {
+                            error("The VERSION file must contain MAJOR.MINOR.PATCH (e.g. 1.0.0), found '${baseVersion}'.")
+                        }
+                        def parts = baseVersion.replaceFirst(/^v/, '').tokenize('.')
+                        env.APP_VERSION = "${parts[0]}.${parts[1]}.${env.BUILD_NUMBER}"
+                        echo "DEPLOY_VERSION left blank -- generated version ${env.APP_VERSION} (VERSION ${baseVersion}, build ${env.BUILD_NUMBER})."
                     }
-                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${env.APP_VERSION}"
-                    currentBuild.description = "${env.APP_VERSION} -> ${env.TARGET_ENV} (vendor portal)"
+                    // Docker tags allow [A-Za-z0-9_.-]: SemVer '+build' metadata becomes '_'.
+                    env.IMAGE_REPO = 'tnbs-vendor-portal'
+                    env.IMAGE_TAG_PREFIX = env.TARGET_ENV == 'production' ? 'prod' : 'staging'
+                    env.PORTAL_IMAGE = env.APP_VERSION ? "${env.IMAGE_REPO}:${env.IMAGE_TAG_PREFIX}-${env.APP_VERSION.replaceAll(/[^0-9A-Za-z_.-]/, '_')}".toString() : ''
+                    def notes = params.RELEASE_NOTES?.trim()
+                    currentBuild.displayName = env.ROLLBACK == 'true'
+                        ? "#${env.BUILD_NUMBER} - rollback ${env.APP_VERSION ?: '(list)'}"
+                        : "#${env.BUILD_NUMBER} - ${env.APP_VERSION}"
+                    currentBuild.description = (env.ROLLBACK == 'true'
+                        ? "rollback ${env.TARGET_ENV} to ${env.APP_VERSION ?: '?'} (vendor portal)"
+                        : "${env.APP_VERSION} (${env.GIT_SHORT_SHA}) -> ${env.TARGET_ENV} (vendor portal)") +
+                        (notes ? "\n${notes}" : '')
+                }
+            }
+        }
+
+        // Rollback: the image must still be on this server. Blank DEPLOY_VERSION = list them.
+        // Release: refuse to reuse a version this environment already has, so a version always means
+        // exactly one build.
+        stage('Check version') {
+            steps {
+                script {
+                    def available = sh(script: "docker images '${env.IMAGE_REPO}' --format '{{.Tag}}' | sed -n 's/^${env.IMAGE_TAG_PREFIX}-//p' | sort -V -r", returnStdout: true).trim().tokenize('\n')
+                    def tag = env.APP_VERSION ? env.APP_VERSION.replaceAll(/[^0-9A-Za-z_.-]/, '_') : ''
+                    if (env.ROLLBACK == 'true') {
+                        echo "Versions on this server for ${env.TARGET_ENV} (newest first): ${available ? available.join(', ') : 'none'}"
+                        if (!tag) {
+                            error('ACTION=rollback needs DEPLOY_VERSION: pick one of the versions listed above.')
+                        }
+                        // v1.2.3 and 1.2.3 are the same version.
+                        def match = [tag, tag.startsWith('v') ? tag.substring(1) : "v${tag}".toString()].find { available.contains(it) }
+                        if (!match) {
+                            error("Version ${env.APP_VERSION} is not on this server any more. Available: ${available ? available.join(', ') : 'none'}.")
+                        }
+                        env.PORTAL_IMAGE = "${env.IMAGE_REPO}:${env.IMAGE_TAG_PREFIX}-${match}".toString()
+                        // The exact version the image was built with (its version.json is checked against it).
+                        def label = sh(script: "docker image inspect --format '{{index .Config.Labels \"org.opencontainers.image.version\"}}' '${env.PORTAL_IMAGE}'", returnStdout: true).trim()
+                        env.APP_VERSION = label ?: match
+                        currentBuild.displayName = "#${env.BUILD_NUMBER} - rollback ${env.APP_VERSION}"
+                        currentBuild.description = "rollback ${env.TARGET_ENV} to ${env.APP_VERSION} (vendor portal)" + (params.RELEASE_NOTES?.trim() ? "\n${params.RELEASE_NOTES.trim()}" : '')
+                        echo "Rolling ${env.TARGET_ENV} back to ${env.PORTAL_IMAGE} (version ${env.APP_VERSION})."
+                    } else if (available.contains(tag)) {
+                        error("Version ${env.APP_VERSION} was already deployed to ${env.TARGET_ENV} (image ${env.PORTAL_IMAGE} exists). Use a new version, or ACTION=rollback to go back to it.")
+                    }
                 }
             }
         }
@@ -109,7 +172,7 @@ pipeline {
         }
 
         stage('Test') {
-            when { expression { params.RUN_TESTS } }
+            when { expression { params.RUN_TESTS && env.ROLLBACK != 'true' } }
             steps {
                 sh 'docker build --target test -t tnbs-vendor-portal:test-$BUILD_NUMBER .'
             }
@@ -121,13 +184,27 @@ pipeline {
         stage('Confirm production deploy') {
             when { expression { env.TARGET_ENV == 'production' } }
             steps {
-                input message: "Deploy vendor portal ${env.APP_VERSION} (${env.GIT_COMMIT ?: 'unknown commit'}) to production?", ok: 'Deploy'
+                script {
+                    def notes = params.RELEASE_NOTES?.trim()
+                    def msg = env.ROLLBACK == 'true'
+                        ? "Roll the production vendor portal back to ${env.APP_VERSION}?"
+                        : "Deploy vendor portal ${env.APP_VERSION} (${env.GIT_SHORT_SHA}) to production?"
+                    input message: msg + (notes ? "\n\n${notes}" : ''), ok: env.ROLLBACK == 'true' ? 'Roll back' : 'Deploy'
+                }
             }
         }
 
         stage('Build & Deploy') {
             steps {
-                sh 'APP_VERSION="$APP_VERSION" docker compose -f "$COMPOSE_FILE" up -d --build --force-recreate "$SERVICE"'
+                script {
+                    if (env.ROLLBACK == 'true') {
+                        sh 'PORTAL_IMAGE="$PORTAL_IMAGE" docker compose -f "$COMPOSE_FILE" up -d --no-build --force-recreate "$SERVICE"'
+                    } else {
+                        sh 'PORTAL_IMAGE="$PORTAL_IMAGE" APP_VERSION="$APP_VERSION" GIT_COMMIT="$GIT_SHORT_SHA" docker compose -f "$COMPOSE_FILE" up -d --build --force-recreate "$SERVICE"'
+                    }
+                }
+                // Keep the 5 newest versions of this environment for ACTION=rollback (never the one running).
+                sh '''docker images "$IMAGE_REPO" --format '{{.Tag}}' | grep "^$IMAGE_TAG_PREFIX-" | sort -V -r | grep -vxF "${PORTAL_IMAGE#*:}" | tail -n +5 | sed "s|^|$IMAGE_REPO:|" | xargs -r docker image rm >/dev/null 2>&1 || true'''
             }
         }
 
@@ -165,7 +242,7 @@ pipeline {
                     def served = sh(script: 'curl -fsS --max-time 15 "$PUBLIC_URL/version.json?b=$BUILD_NUMBER" || true', returnStdout: true).trim()
                     echo "${env.PUBLIC_URL} serves: ${served ?: '(nothing)'}"
                     if (!served.contains("\"version\":\"${env.APP_VERSION}\"")) {
-                        unstable("${env.PUBLIC_URL} is not serving this build yet. Run api-services' edge job so vendor.thenearbyshop.com points at vendor-portal:8080.")
+                        unstable("${env.PUBLIC_URL} is not serving this build yet. Run api-services' edge job so vendor.thenearbyshop.com points at vendor-portal-prod:8080.")
                         return
                     }
                     sh '''

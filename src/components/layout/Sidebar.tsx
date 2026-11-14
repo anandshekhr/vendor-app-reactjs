@@ -58,6 +58,10 @@ export function SidebarNav({ collapsed = false, onNavigate }: { collapsed?: bool
   );
 }
 
+/** The release on screen, from the Docker build (Jenkins sets it); `dev` when running locally. */
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
+const versionLabel = /^\d/.test(APP_VERSION) ? `v${APP_VERSION}` : APP_VERSION;
+
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   return (
     <aside className={cn('hidden shrink-0 flex-col border-r border-line bg-surface transition-[width] duration-200 lg:flex', collapsed ? 'w-[68px]' : 'w-60')}>
@@ -68,6 +72,11 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         </button>
       </div>
       <SidebarNav collapsed={collapsed} />
+      {!collapsed && (
+        <p className="px-4 pb-3 text-[11px] text-ink-subtle" title={`Vendor portal ${versionLabel}`}>
+          {versionLabel}
+        </p>
+      )}
     </aside>
   );
 }

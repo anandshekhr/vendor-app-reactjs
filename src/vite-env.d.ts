@@ -10,6 +10,8 @@ interface ImportMetaEnv {
   readonly VITE_POS_STALE_CATALOGUE_MINUTES?: string;
   readonly VITE_POS_SERVER_IDEMPOTENCY?: string;
   readonly VITE_POLL_INTERVAL_MS?: string;
+  /** Release version, set by the Docker build (Jenkins). */
+  readonly VITE_APP_VERSION?: string;
 }
 
 interface ImportMeta {
