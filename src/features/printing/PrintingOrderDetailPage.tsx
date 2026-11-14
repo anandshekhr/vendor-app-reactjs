@@ -23,6 +23,7 @@ import {
   useSetPrintStatusMutation,
 } from './api';
 import { FulfilmentBadge, PrintStatusBadge } from './PrintBadges';
+import { CustomerContact } from '@/components/feedback/CustomerContact';
 import { PickupVerifyPanel } from './PickupVerifyPanel';
 import { DELIVERY_STATE_TEXT, FULFILMENT_STEPS, formatBytes, printOptionsSummary, stepIndex } from './printOrderView';
 
@@ -165,11 +166,7 @@ export function PrintingOrderDetailPage() {
             <CardHeader title="Customer" />
             <CardBody className="space-y-2 text-sm">
               <p className="font-medium">{order.customer.name}</p>
-              {order.customer.phone && (
-                <a href={`tel:${order.customer.phone}`} className="flex items-center gap-2 text-brand-700 hover:underline">
-                  <Phone className="h-4 w-4" /> {order.customer.phone}
-                </a>
-              )}
+              <CustomerContact phone={order.customer.phone} masked={order.contact_masked} visibleUntil={order.contact_visible_until} />
               {order.special_instructions && <p className="rounded-md bg-ink/[0.03] p-2 text-ink-muted">“{order.special_instructions}”</p>}
             </CardBody>
           </Card>

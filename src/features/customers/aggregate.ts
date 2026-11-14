@@ -1,4 +1,5 @@
 import type { OrderListItem } from '@/types/api';
+import { isMaskedContact } from '@/utils/contactPrivacy';
 
 export interface CustomerSummary {
   key: string;
@@ -19,9 +20,14 @@ const EXCLUDED = new Set(['rejected', 'cancelled']);
 export function aggregateCustomers(orders: OrderListItem[]): CustomerSummary[] {
   const map = new Map<string, CustomerSummary>();
   for (const o of orders) {
-    const phone = (o.customer_phone || '').replace(/\D/g, '').slice(-10);
+    const raw = o.customer_phone || '';
     const name = (o.customer_name || '').trim();
-    const key = phone || (name ? `name:${name.toLowerCase()}` : 'walk-in');
+    const masked = isMaskedContact(raw);
+    const digits = raw.replace(/\D/g, '');
+    // A masked number keeps only its last digits: key it by those plus the name, and merge it into the matching
+    // full-number customer below, so one customer isn't split between their recent and older orders.
+    const phone = masked ? raw : digits.slice(-10);
+    const key = masked ? `masked:${digits.slice(-3)}:${name.toLowerCase()}` : phone || (name ? `name:${name.toLowerCase()}` : 'walk-in');
     const existing = map.get(key);
     const spend = EXCLUDED.has(o.status) ? 0 : Number(o.total_amount) || 0;
     if (!existing) {
@@ -43,6 +49,21 @@ export function aggregateCustomers(orders: OrderListItem[]): CustomerSummary[] {
         if (name) existing.name = name;
       }
     }
+  }
+  for (const [key, group] of [...map.entries()]) {
+    if (!key.startsWith('masked:')) continue;
+    const [, tail, lowerName] = key.split(':');
+    const match = [...map.values()].find(
+      (c) => !c.key.startsWith('masked:') && /^\d{10}$/.test(c.phone) && c.phone.endsWith(tail) && c.name.toLowerCase() === lowerName,
+    );
+    if (!match) continue;
+    match.orders += group.orders;
+    match.completedSpend += group.completedSpend;
+    if (new Date(group.lastOrderAt) > new Date(match.lastOrderAt)) {
+      match.lastOrderAt = group.lastOrderAt;
+      match.lastOrderId = group.lastOrderId;
+    }
+    map.delete(key);
   }
   return [...map.values()].sort((a, b) => new Date(b.lastOrderAt).getTime() - new Date(a.lastOrderAt).getTime());
 }

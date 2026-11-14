@@ -292,3 +292,17 @@ test('printing: quotation and per-page prices', async ({ page }) => {
   await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('₹3.00/page')).toBeVisible();
 });
+
+test('customer contact is hidden some time after an order is delivered', async ({ page }) => {
+  await login(page);
+  await page.goto('/orders/1094'); // delivered 9 h ago
+  await expect(page.locator('a[href^="tel:"]').first()).toBeVisible();
+  await expect(page.getByText(/Visible until/)).toBeVisible();
+
+  await page.goto('/orders/1092'); // delivered 5 days ago
+  await expect(page.getByText(/•••••••\d{3}/).first()).toBeVisible();
+  // Priya's number (9876543210) appears nowhere, as text or as a call link. (A rider's tel: link may still exist.)
+  await expect(page.locator('a[href*="9876543210"]')).toHaveCount(0);
+  await expect(page.getByText('9876543210')).toHaveCount(0);
+  await expect(page.getByText(/hidden for the customer’s privacy/)).toBeVisible();
+});

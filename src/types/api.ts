@@ -205,7 +205,13 @@ export interface OrderHistoryEntry {
   created_at: ISODateTime;
 }
 
-export interface OrderDetail {
+/** Present on vendor order/booking/print responses: the customer's contact is hidden some time after closing. */
+export interface ContactPrivacy {
+  contact_masked?: boolean;
+  contact_visible_until?: ISODateTime | null;
+}
+
+export interface OrderDetail extends ContactPrivacy {
   id: number;
   external_id: string | null;
   customer_name: string;
@@ -505,7 +511,7 @@ export interface BookingListItem {
   balance_due: Decimal;
 }
 
-export interface BookingDetail extends Omit<BookingListItem, 'balance_due'> {
+export interface BookingDetail extends Omit<BookingListItem, 'balance_due'>, ContactPrivacy {
   end_time: ISODateTime;
   amount_paid: Decimal;
   amount_due: Decimal;
@@ -876,7 +882,7 @@ export interface PrintPickupBlock {
   picked_up_at: ISODateTime | null;
 }
 
-export interface PrintOrderDetail extends Omit<PrintOrderListItem, 'customer_name' | 'file_count' | 'delivery_state'> {
+export interface PrintOrderDetail extends Omit<PrintOrderListItem, 'customer_name' | 'file_count' | 'delivery_state'>, ContactPrivacy {
   print_shop_name: string;
   payment_method_display: string;
   is_delivery: boolean;

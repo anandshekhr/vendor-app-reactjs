@@ -153,7 +153,8 @@ export function createMockDb() {
       rejected_at: null,
       ready_at: null,
       out_for_delivery_at: null,
-      delivered_at: status === 'delivered' || pos ? iso(i * 90) : null,
+      // Order 1092 (Priya Sharma) was delivered 5 days ago, so its customer contact is past the 72 h window (masked).
+      delivered_at: status === 'delivered' || pos ? iso(i === 8 ? 5 * 24 * 60 : i * 90) : null,
       cancelled_at: null,
       rejection_reason: status === 'rejected' ? 'Item out of stock' : '',
       created_at: iso(i * 95 + 5),
@@ -361,10 +362,24 @@ export function createMockDb() {
     pendingWithdrawals: () => withdrawals.filter((w) => w.status === 'pending' || w.status === 'processing').reduce((s, w) => s + Number(w.amount), 0),
     catalogName: (id: string) => catalog.find((c) => c.id === id)?.name ?? 'Service',
 
+    /** Mirrors api-services common/contact_privacy.py: contact hidden 72 h after the order closes. */
+    contactPrivacy: (o: VendorOrderFull) => {
+      const closed = o.status === 'delivered' ? o.delivered_at : o.status === 'cancelled' || o.status === 'rejected' ? o.updated_at : null;
+      const until = closed ? new Date(new Date(closed).getTime() + 72 * 3600_000) : null;
+      const masked = Boolean(until && until.getTime() <= Date.now());
+      const mask = (v?: string | null) => (v ? `${v.replace(/\D/g, '').length > 10 ? '+91' : ''}${'\u2022'.repeat(7)}${v.replace(/\D/g, '').slice(-3)}` : v);
+      return {
+        masked,
+        until: until ? until.toISOString() : null,
+        phone: masked ? mask(o.customer_phone) : o.customer_phone,
+        address: masked && o.customer_address ? { ...o.customer_address, phone_number: mask((o.customer_address as { phone_number?: string }).phone_number) } : o.customer_address,
+      };
+    },
     orderListItem: (o: VendorOrderFull) => ({
       id: o.id,
       customer_name: o.customer_name,
-      customer_phone: o.customer_phone,
+      customer_phone: db.contactPrivacy(o).phone,
+      contact_masked: db.contactPrivacy(o).masked,
       items_count: o.items?.length ?? 0,
       total_amount: o.total_amount,
       status: o.status,
@@ -378,8 +393,10 @@ export function createMockDb() {
       id: o.id,
       external_id: o.external_id,
       customer_name: o.customer_name,
-      customer_phone: o.customer_phone,
-      customer_address: o.customer_address,
+      customer_phone: db.contactPrivacy(o).phone,
+      customer_address: db.contactPrivacy(o).address,
+      contact_masked: db.contactPrivacy(o).masked,
+      contact_visible_until: db.contactPrivacy(o).until,
       item_total: o.item_total,
       discount_amount: o.discount_amount,
       tax_amount: o.tax_amount,

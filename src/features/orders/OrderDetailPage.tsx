@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ExternalLink, MapPin, MessageSquare, Phone, Printer, Truck } from 'lucide-react';
+import { ExternalLink, MapPin, MessageSquare, Printer, Truck } from 'lucide-react';
 import { Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, Field, Skeleton, Textarea } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatusBadge } from '@/components/feedback/StatusBadge';
+import { CustomerContact } from '@/components/feedback/CustomerContact';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { BackendGap } from '@/components/feedback/BackendGap';
 import { useToast } from '@/hooks/useToast';
@@ -208,11 +209,7 @@ export function OrderDetailPage() {
             <CardHeader title="Customer" />
             <CardBody className="space-y-3 text-sm">
               <p className="font-medium">{order.customer_name || 'Walk-in / unknown'}</p>
-              {order.customer_phone && (
-                <a href={`tel:${order.customer_phone}`} className="flex items-center gap-2 text-brand-700 hover:underline">
-                  <Phone className="h-4 w-4" /> {order.customer_phone}
-                </a>
-              )}
+              <CustomerContact phone={order.customer_phone} masked={order.contact_masked} visibleUntil={order.contact_visible_until} />
               {address && (
                 <p className="flex gap-2 text-ink-muted">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0" /> {address}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { MessageSquare, Phone } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import { Button, Card, CardBody, CardHeader, ConfirmDialog, Dialog, Field, Input, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatusBadge } from '@/components/feedback/StatusBadge';
@@ -11,6 +11,7 @@ import { formatCurrency, formatDateTime, titleCase } from '@/utils/format';
 import type { BookingAction } from '@/types/api';
 import { useBookingActionMutation, useGetBookingQuery } from './api';
 import { allowedBookingActions, BOOKING_ACTION_LABELS, rescheduleWindow } from './transitions';
+import { CustomerContact } from '@/components/feedback/CustomerContact';
 
 function toLocalInput(iso: string) {
   const d = new Date(iso);
@@ -107,9 +108,7 @@ export function BookingDetailPage() {
             <CardHeader title="Customer" />
             <CardBody className="space-y-2 text-sm">
               <p className="font-medium">{b.customer_name}</p>
-              <a href={`tel:${b.customer_phone}`} className="flex items-center gap-2 text-brand-700 hover:underline">
-                <Phone className="h-4 w-4" /> {b.customer_phone}
-              </a>
+              <CustomerContact phone={b.customer_phone} masked={b.contact_masked} visibleUntil={b.contact_visible_until} />
               <Link to="/chat">
                 <Button size="sm" variant="outline" leftIcon={<MessageSquare className="h-4 w-4" />}>
                   Message customer

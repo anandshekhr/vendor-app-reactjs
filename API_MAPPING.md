@@ -253,6 +253,16 @@ README is `src/apps/print_shop/README.md` there.
 Customer checkout (choosing delivery or pickup, pickup code/QR, tracking) is in the customer app, not this portal; the
 API for it is listed in the api-services README.
 
+## Customer contact privacy
+
+Vendors see a customer's phone and email only while they need them: once an order or booking is delivered/completed,
+cancelled or rejected, the API keeps them visible for `VENDOR_CUSTOMER_CONTACT_HOURS` (default 72) and then returns them
+masked (`+91•••••••678`, `a•••@g•••.com`) on every vendor endpoint — orders, bookings, print orders, chat (when the
+conversation is tied to that order/booking) and the invoice page. Responses carry `contact_masked` and
+`contact_visible_until`; the portal shows masked values without call links and says why, and the Customers page groups
+masked orders with the same customer's recent ones. Needs the api-services `claude/vendor-customer-contact-masking`
+branch; older servers simply keep returning full numbers.
+
 ## BACKEND_GAPS — required changes
 
 | ID | Gap | Required change (suggested contract) | Priority |

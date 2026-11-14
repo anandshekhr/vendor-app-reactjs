@@ -14,6 +14,7 @@ import { toApiError } from '@/services/api/errors';
 import { formatCurrency, formatDateTime, initials } from '@/utils/format';
 import type { OrderListItem } from '@/types/api';
 import { aggregateCustomers } from './aggregate';
+import { isMaskedContact } from '@/utils/contactPrivacy';
 
 const PAGES_PER_LOAD = 5;
 
@@ -80,7 +81,7 @@ export function CustomersPage() {
             rows={loading && orders.length === 0 ? undefined : rows}
             loading={loading}
             rowKey={(c) => c.key}
-            onRowClick={(c) => navigate(c.phone ? `/orders?q=${c.phone}` : `/orders/${c.lastOrderId}`)}
+            onRowClick={(c) => navigate(c.phone && !isMaskedContact(c.phone) ? `/orders?q=${c.phone}` : `/orders/${c.lastOrderId}`)}
             empty={<EmptyState icon={<Users className="h-5 w-5" />} title="No customers yet" />}
             columns={[
               {
