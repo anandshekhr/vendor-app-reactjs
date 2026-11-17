@@ -13,6 +13,12 @@ services:
       args:
         VITE_API_BASE_URL: https://staging-api.thenearbyshop.com
         APP_VERSION: ${APP_VERSION:-unknown}
+        # Push notifications: Firebase web config from the Jenkins environment (public values, not secrets).
+        VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY:-}
+        VITE_FIREBASE_PROJECT_ID: ${VITE_FIREBASE_PROJECT_ID:-}
+        VITE_FIREBASE_MESSAGING_SENDER_ID: ${VITE_FIREBASE_MESSAGING_SENDER_ID:-}
+        VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID:-}
+        VITE_FIREBASE_VAPID_KEY: ${VITE_FIREBASE_VAPID_KEY:-}
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
     # Jenkins names each build tnbs-vendor-portal:staging-<version> and keeps the newest five, so
     # ACTION=rollback can start an earlier one without rebuilding.

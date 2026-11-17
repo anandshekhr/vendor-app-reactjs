@@ -97,6 +97,22 @@ PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:e2e
 * Only one sync runs at a time, even across browser tabs (Web Locks). After a sync, the catalogue is refreshed from the server.
 * Only the methods in `VITE_OFFLINE_PAYMENT_METHODS` are allowed offline. Online UPI/card sales need the cashier to confirm the payment arrived, because the backend records POS sales as paid without checking with the payment provider.
 
+## Push notifications (FCM)
+
+Vendors can turn on **push notifications for this device** in **Settings → Notifications**. The browser's Firebase
+Cloud Messaging token is registered with api-services (`POST /api/v2/notifications/device/register/`, `app_type: web`,
+`role: vendor`), which already pushes to every active token of a vendor when a **new order** or **new booking** is
+created; clicking the notification opens that order/booking in the portal. The token is re-registered on each app start
+(tokens rotate) and deactivated on sign-out. While the portal is open, a push shows a toast and refreshes the lists.
+
+Setup (once): in the Firebase project api-services already uses (`FIREBASE_SERVICE_ACCOUNT`), add a **Web app** and a
+**Web Push certificate** (Cloud Messaging → Web configuration). Put the values in Jenkins' global environment as
+`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID` and
+`VITE_FIREBASE_VAPID_KEY` (public values, not secrets); the compose files pass them into the build. Without them the
+portal builds normally and Settings shows push as "Not set up". On the API, `VENDOR_PORTAL_URL` (default
+`https://vendor.thenearbyshop.com`) is where the notification links point. Code: `src/services/push/`,
+`public/firebase-messaging-sw.js`.
+
 ## Printer setup and auto-print
 
 **Settings → Printer** (`/settings/printer`) sets up the printer for *this device* — each counter keeps its own setup in

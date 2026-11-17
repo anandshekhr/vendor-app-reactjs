@@ -44,6 +44,8 @@ on('POST', '/api/v1/login/verify-otp', ({ body }) =>
 );
 on('POST', '/api/v2/token/refresh/', () => [200, { access: fakeJwt() }]);
 on('POST', '/api/v2/logout', () => [200, { message: 'Logged out successfully' }]);
+on('POST', '/api/v2/notifications/device/register/', ({ body }) => [200, { success: true, created: true, token: body?.fcm_token }]);
+on('POST', '/api/v2/notifications/device/deactivate/', () => [200, { success: true, message: 'Device deactivated successfully' }]);
 
 // ─── Vendor ───
 on('GET', '/api/v2/vendors/me/', ({ db }) => [200, db.me]);

@@ -7,6 +7,7 @@ import { ErrorBoundary } from '@/components/feedback/ErrorBoundary';
 import { OfflineBanner } from '@/components/feedback/OfflineBanner';
 import { useActivityPolling } from '@/features/notifications/useActivityPolling';
 import { useOfflineSync } from '@/features/offline-sync/useOfflineSync';
+import { usePushNotifications } from '@/services/push/usePushNotifications';
 import { Sidebar, SidebarNav } from './Sidebar';
 import { Topbar } from './Topbar';
 import { Logo } from './Logo';
@@ -18,6 +19,7 @@ export function AppShell() {
   const location = useLocation();
   useActivityPolling();
   useOfflineSync();
+  usePushNotifications();
 
   useEffect(() => {
     dispatch(setMobileNav(false));

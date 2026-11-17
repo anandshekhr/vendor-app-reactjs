@@ -5,6 +5,7 @@ import { clearOfflineData } from '@/services/offline/db';
 import { useAppDispatch } from '@/hooks/store';
 import { resetNotifications } from '@/features/notifications/notificationsSlice';
 import { cartCleared } from '@/features/pos/posSlice';
+import { deactivateOnSignOut } from '@/services/push/fcm';
 import { useLogoutMutation } from './api';
 import { signedOut } from './authSlice';
 
@@ -13,6 +14,8 @@ export function useLogout() {
   const navigate = useNavigate();
   const [logout] = useLogoutMutation();
   return useCallback(async () => {
+    // While still signed in: stop this device getting this vendor's pushes (the next person may be someone else).
+    await deactivateOnSignOut().catch(() => undefined);
     // Best effort: the server only clears its Django session (JWTs are not blacklisted — API_MAPPING G-1).
     try {
       await logout().unwrap();

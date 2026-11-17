@@ -13,6 +13,7 @@ import { db, getMeta, META_CATALOGUE_SYNCED_AT } from '@/services/offline/db';
 import { formatRelative, maskPhone } from '@/utils/format';
 import { cn } from '@/utils/cn';
 import { usePrinterSettings } from '@/services/autoprint/settings';
+import { PushToggle } from './PushToggle';
 
 const THEMES: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -103,9 +104,10 @@ export function SettingsPage() {
         </Card>
         <Card>
           <CardHeader title="Notifications & language" />
-          <CardBody className="space-y-2">
-            <p className="text-sm text-ink-muted">In-app alerts for new orders and bookings are generated while the portal is open.</p>
-            <BackendGap gap="G-14" title="Notification preferences, push notifications and language selection are not supported by the server yet" />
+          <CardBody className="space-y-3">
+            <PushToggle />
+            <p className="text-xs text-ink-muted">While the portal is open, new orders and bookings also appear in the in-app notification centre.</p>
+            <BackendGap gap="G-14" title="Per-type notification preferences and language selection are not supported by the server yet" />
           </CardBody>
         </Card>
       </div>

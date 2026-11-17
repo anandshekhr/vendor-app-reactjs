@@ -22,6 +22,12 @@ ARG VITE_OFFLINE_PAYMENT_METHODS=cash
 ARG VITE_POS_STALE_CATALOGUE_MINUTES=60
 ARG VITE_POS_SERVER_IDEMPOTENCY=true
 ARG VITE_POLL_INTERVAL_MS=20000
+# Push notifications (Firebase web config -- public values; push is off when unset).
+ARG VITE_FIREBASE_API_KEY=
+ARG VITE_FIREBASE_PROJECT_ID=
+ARG VITE_FIREBASE_MESSAGING_SENDER_ID=
+ARG VITE_FIREBASE_APP_ID=
+ARG VITE_FIREBASE_VAPID_KEY=
 ARG APP_VERSION=dev
 ARG GIT_COMMIT=unknown
 # Shown at the bottom of the sidebar, so you can tell which release is on screen.

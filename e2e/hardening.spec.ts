@@ -105,3 +105,11 @@ test('printer: auto-print a POS receipt and see it in the print log', async ({ p
   await entry.getByRole('button', { name: 'Reprint' }).click();
   await expect(page.getByText('Sent to the printer')).toBeVisible();
 });
+
+test('settings: push notification status is shown for this device', async ({ page }) => {
+  await login(page);
+  await page.goto('/settings');
+  await expect(page.getByText('Push notifications on this device')).toBeVisible();
+  // The e2e build has no Firebase config, so push reports itself as not set up instead of failing.
+  await expect(page.getByText('Not set up')).toBeVisible();
+});
