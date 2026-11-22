@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/useToast';
 import { cn } from '@/utils/cn';
 import { formatCurrency, formatDateTime } from '@/utils/format';
 import type { PrintJob, PrintOrderDetail, PrintOrderFile, PrintOrderStatus } from '@/types/api';
+import { DocumentPreview } from './DocumentPreview';
 import {
   useAcceptPrintOrderMutation,
   useCancelPrintOrderMutation,
@@ -354,11 +355,8 @@ function DocumentsCard({ order }: { order: PrintOrderDetail }) {
           </li>
         ))}
       </ul>
-      <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} title={preview?.file.original_filename ?? ''} size="xl">
-        {preview && (
-          // sandbox: no scripts or navigation from the customer's file; the server also sends a sandbox CSP.
-          <iframe title={`Preview of ${preview.file.original_filename}`} src={preview.url} sandbox="" className="h-[70vh] w-full rounded-md border border-line bg-white" />
-        )}
+      <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} title={preview?.file.original_filename ?? ''} description={preview ? printOptionsSummary(preview.file) : undefined} size="xl">
+        {preview && <DocumentPreview file={preview.file} url={preview.url} onDownload={() => open(preview.file, 'attachment')} />}
       </Dialog>
     </Card>
   );

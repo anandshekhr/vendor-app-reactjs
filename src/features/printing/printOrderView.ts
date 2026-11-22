@@ -101,3 +101,23 @@ export function printOptionsSummary(f: Pick<PrintOrderFile, 'color_mode' | 'pape
     .filter(Boolean)
     .join(' · ');
 }
+
+/**
+ * Pages a '1-5,8,11-13' range selects, as the server prices them (apps.print_shop pricing_service.parse_page_range):
+ * blank or unreadable means every page, and a range that selects nothing also means every page.
+ */
+export function selectedPages(pageRange: string, totalPages: number): Set<number> {
+  const all = new Set(Array.from({ length: totalPages }, (_, i) => i + 1));
+  if (!pageRange.trim() || totalPages <= 0) return all;
+  const picked = new Set<number>();
+  for (const raw of pageRange.split(',')) {
+    const chunk = raw.trim();
+    if (!chunk) continue;
+    const [a, b] = chunk.includes('-') ? chunk.split('-', 2) : [chunk, chunk];
+    const start = Number(a);
+    const end = Number(b);
+    if (!Number.isInteger(start) || !Number.isInteger(end)) return all;
+    for (let p = Math.max(start, 1); p <= Math.min(end, totalPages); p++) picked.add(p);
+  }
+  return picked.size ? picked : all;
+}

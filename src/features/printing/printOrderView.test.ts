@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FULFILMENT_STEPS, formatBytes, parsePickupInput, printOptionsSummary, stepIndex } from './printOrderView';
+import { FULFILMENT_STEPS, formatBytes, parsePickupInput, printOptionsSummary, selectedPages, stepIndex } from './printOrderView';
 
 describe('printing order view helpers', () => {
   it('follows separate steps for pickup and delivery', () => {
@@ -28,5 +28,18 @@ describe('printing order view helpers', () => {
     expect(printOptionsSummary({ color_mode: 'BW', paper_size: 'A4', sided: 'SINGLE', page_range: '', binding: 'NONE' })).toBe('B&W · A4 · Single-sided · All pages');
     expect(formatBytes(245_000)).toBe('239 KB');
     expect(formatBytes(3 * 1024 * 1024)).toBe('3.0 MB');
+  });
+});
+
+describe('selectedPages (matches the server pricing)', () => {
+  const list = (r: string, n: number) => [...selectedPages(r, n)].sort((a, b) => a - b);
+  it('reads ranges and single pages, clipped to the document', () => {
+    expect(list('1-3, 5,9-20', 10)).toEqual([1, 2, 3, 5, 9, 10]);
+    expect(list('1-5,8', 2)).toEqual([1, 2]);
+  });
+  it('blank, unreadable or empty selections mean every page', () => {
+    expect(list('', 3)).toEqual([1, 2, 3]);
+    expect(list('a-b', 3)).toEqual([1, 2, 3]);
+    expect(list('7-9', 3)).toEqual([1, 2, 3]);
   });
 });
