@@ -1152,3 +1152,22 @@ export interface BillingState {
   paid_amount?: Decimal;
   shop_reopened?: boolean;
 }
+
+// ─── Document files (GET/POST /vendor/dashboard/api/store/document-files/) ──
+
+export interface DocumentFile {
+  id: number;
+  document_type: string;
+  document_type_display: string;
+  is_verified: boolean;
+  file_name: string;
+  created_at: ISODateTime;
+}
+
+export interface DocumentFiles {
+  has_application: boolean;
+  document_types: { value: string; label: string }[];
+  max_size_mb: number;
+  allowed_extensions: string[];
+  results: DocumentFile[];
+}

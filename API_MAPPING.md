@@ -267,9 +267,9 @@ branch; older servers simply keep returning full numbers.
 
 | ID | Gap | Required change (suggested contract) | Priority |
 |---|---|---|---|
-| G-1 | JWT logout does not invalidate refresh tokens | Install `token_blacklist`, `POST /api/v2/logout {refresh}` blacklists it | Medium |
+| G-1 | ~~JWT logout does not invalidate refresh tokens~~ **Resolved** in api-services `claude/vendor-modules`: `POST /api/v2/logout {refresh}` blacklists the caller's refresh token; the portal sends it. | — | Done |
 | G-2 | ~~No hybrid vendor flag~~ **Resolved** in `claude/vendor-modules`: `Shop.business_type` (product / service / hybrid) follows the shop's categories; `store/categories/` lets a vendor pick several categories (product and service mixed) with their subscription costs. | — | Done |
-| G-3 | Onboarding is limited to what the application API collects. Status lookup and starter products are resolved on `claude/vendor-portal-api`. Still missing: document resubmission by the vendor, and description/logo/coverage at registration (set after approval). | Vendor-facing document resubmission endpoint | Low |
+| G-3 | Onboarding: status lookup and starter products resolved earlier. **Document re-upload resolved** in `claude/vendor-modules`: `store/document-files/` (list + upload; new files join the onboarding application unverified for review). Still set after approval: description, logo, coverage. | — | Low |
 | G-4 | ~~No date-range analytics~~ **Resolved** in api-services `claude/vendor-modules`: `GET /vendor/dashboard/api/reports/summary/?from=&to=` (revenue, POS vs online, payment methods, top products/services, staff, daily series, previous-period comparison). | — | Done |
 | G-5 | No returns model | `VendorOrderReturn` + action `return` | Low |
 | G-6 | ~~No vendor-readable delivery tracking~~ **Mostly resolved** in api-services `a33a7cc` (rider-search state, rider contact, retry/stop). Remaining: live rider coordinates and ETA for vendors. | `last_latitude/longitude`, `estimated_delivery_time` in the `delivery` block | Low |

@@ -54,6 +54,25 @@ on('GET', '/vendor/dashboard/api/store/profile/', ({ db }) => {
   return [200, db.shop];
 });
 on('GET', '/vendor/dashboard/api/store/categories/', ({ db }) => [200, db.shopCategories()]);
+const DOC_TYPES = [
+  { value: 'gst_certificate', label: 'GST Certificate' },
+  { value: 'pan_card', label: 'PAN Card' },
+  { value: 'trade_license', label: 'Trade License' },
+];
+const documentFiles: { id: number; document_type: string; document_type_display: string; is_verified: boolean; file_name: string; created_at: string }[] = [
+  { id: 1, document_type: 'pan_card', document_type_display: 'PAN Card', is_verified: true, file_name: 'pan.pdf', created_at: new Date(Date.now() - 90 * 86400_000).toISOString() },
+];
+on('GET', '/vendor/dashboard/api/store/document-files/', () => [200, { has_application: true, document_types: DOC_TYPES, max_size_mb: 10, allowed_extensions: ['jpeg', 'jpg', 'pdf', 'png', 'webp'], results: documentFiles }]);
+on('POST', '/vendor/dashboard/api/store/document-files/', ({ body }) => {
+  const fd = body as FormData;
+  const type = DOC_TYPES.find((t) => t.value === fd.get('document_type'));
+  const file = fd.get('file') as File | null;
+  if (!type) return [400, { document_type: ['Choose a document type.'] }];
+  if (!file) return [400, { file: ['Attach a file.'] }];
+  const row = { id: documentFiles.length + 1, document_type: type.value, document_type_display: type.label, is_verified: false, file_name: file.name, created_at: new Date().toISOString() };
+  documentFiles.unshift(row);
+  return [201, row];
+});
 on('GET', '/vendor/dashboard/api/billing/', ({ db }) => [200, db.billing()]);
 on('POST', '/vendor/dashboard/api/billing/settle/', ({ db }) => db.settleBilling());
 on('GET', '/vendor/dashboard/api/reports/summary/', ({ db, query }) => {

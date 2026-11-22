@@ -1,3 +1,4 @@
+import { tokenStorage } from '@/services/auth/tokenStorage';
 import { api } from '@/services/api';
 import type { VerifyOtpResponse } from '@/types/api';
 import { toIndianE164 } from '@/utils/phone';
@@ -19,7 +20,8 @@ export const authApi = api.injectEndpoints({
       }),
     }),
     logout: build.mutation<unknown, void>({
-      query: () => ({ url: '/api/v2/logout', method: 'POST' }),
+      // Sends the refresh token so the server revokes it (it can't mint new access tokens after sign-out).
+      query: () => ({ url: '/api/v2/logout', method: 'POST', data: { refresh: tokenStorage.getRefresh() ?? undefined } }),
     }),
   }),
 });

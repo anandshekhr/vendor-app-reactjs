@@ -1,5 +1,5 @@
 import { api } from '@/services/api';
-import type { ShopCategories, ShopDocumentRecord, ShopProfile, ShopQrResponse, StoreHour, VendorMe } from '@/types/api';
+import type { DocumentFile, DocumentFiles, ShopCategories, ShopDocumentRecord, ShopProfile, ShopQrResponse, StoreHour, VendorMe } from '@/types/api';
 
 export const profileApi = api.injectEndpoints({
   endpoints: (build) => ({
@@ -22,6 +22,14 @@ export const profileApi = api.injectEndpoints({
     updateShopCategories: build.mutation<ShopCategories, number[]>({
       query: (ids) => ({ url: '/vendor/dashboard/api/store/categories/', method: 'PUT', data: { category_ids: ids } }),
       invalidatesTags: ['ShopCategories', 'Shop', 'Me'],
+    }),
+    getDocumentFiles: build.query<DocumentFiles, void>({
+      query: () => '/vendor/dashboard/api/store/document-files/',
+      providesTags: ['Documents'],
+    }),
+    uploadDocumentFile: build.mutation<DocumentFile, FormData>({
+      query: (data) => ({ url: '/vendor/dashboard/api/store/document-files/', method: 'POST', data }),
+      invalidatesTags: ['Documents'],
     }),
     getStoreHours: build.query<StoreHour[], void>({
       query: () => '/vendor/dashboard/api/store/hours/',
@@ -61,6 +69,8 @@ export const {
   useGetShopProfileQuery,
   useUpdateShopProfileMutation,
   useGetShopCategoriesQuery,
+  useGetDocumentFilesQuery,
+  useUploadDocumentFileMutation,
   useUpdateShopCategoriesMutation,
   useGetStoreHoursQuery,
   useUpdateStoreHoursMutation,

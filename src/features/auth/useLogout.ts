@@ -16,7 +16,7 @@ export function useLogout() {
   return useCallback(async () => {
     // While still signed in: stop this device getting this vendor's pushes (the next person may be someone else).
     await deactivateOnSignOut().catch(() => undefined);
-    // Best effort: the server only clears its Django session (JWTs are not blacklisted — API_MAPPING G-1).
+    // Best effort: the server ends its session and revokes the refresh token; local sign-out proceeds regardless.
     try {
       await logout().unwrap();
     } catch {

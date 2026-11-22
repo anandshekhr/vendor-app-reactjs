@@ -6,7 +6,7 @@ import { ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Button, Card, CardBody, CardHeader, Field, Input, Skeleton } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ErrorState } from '@/components/feedback/ErrorState';
-import { BackendGap } from '@/components/feedback/BackendGap';
+import { DocumentFilesCard } from './DocumentFilesCard';
 import { useToast } from '@/hooks/useToast';
 import { useGetMeQuery, useGetStoreDocumentsQuery, useUpdateStoreDocumentsMutation } from './api';
 
@@ -98,9 +98,7 @@ export function DocumentsPage() {
               <p className="text-ink-muted">Verification is decided by the TheNearByShop team; the portal only displays the server's status.</p>
             </CardBody>
           </Card>
-          <BackendGap gap="G-3" title="Document files, rejection reasons and resubmission are handled through the onboarding team">
-            The document-file endpoints are not restricted to the shop owner, so uploads are not offered here.
-          </BackendGap>
+          <DocumentFilesCard />
         </div>
       </div>
     </>

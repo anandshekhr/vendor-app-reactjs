@@ -117,3 +117,15 @@ test('billing: overdue dues pause the shop until paid from the wallet', async ({
   await expect(page.getByText('Grocery').first()).toBeVisible();
   await expect(page.getByText('Unpaid (insufficient balance)').first()).toBeVisible();
 });
+
+test('documents: re-upload a document for review', async ({ page }) => {
+  await login(page);
+  await page.goto('/profile/documents');
+  await expect(page.getByRole('heading', { name: 'Document files' })).toBeVisible();
+  await page.getByLabel('Document type').selectOption('gst_certificate');
+  await page.getByLabel('Document file').setInputFiles({ name: 'gst.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4') });
+  await page.getByRole('button', { name: 'Upload' }).click();
+  await expect(page.getByText('Document uploaded')).toBeVisible();
+  const row = page.getByRole('listitem').filter({ hasText: 'GST Certificate' });
+  await expect(row.getByText('In review')).toBeVisible();
+});
