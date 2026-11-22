@@ -2,6 +2,8 @@
 import { allowedBookingActions } from '@/features/bookings/transitions';
 import type {
   ApplicantApplication,
+  BillingCharge,
+  BillingState,
   ReportHeadline,
   ReportSummary,
   ServerNotification,
@@ -251,6 +253,33 @@ export function createMockDb() {
     { id: 2, type: 'billing', title: 'Subscription paid', body: 'Grocery: ₹10.00 for today.', link: '/billing', is_read: false, created_at: iso(240) },
     { id: 1, type: 'withdrawal', title: 'Withdrawal paid', body: '₹1500.00 has been sent to your bank account.', link: '/wallet/withdrawals', is_read: true, created_at: iso(3000) },
   ];
+
+  /** Set localStorage 'tnbs.mock.billing' = 'overdue' to start with unpaid dues and a paused shop. */
+  const billingOverdue = (() => {
+    try {
+      return localStorage.getItem('tnbs.mock.billing') === 'overdue';
+    } catch {
+      return false;
+    }
+  })();
+  const billingCharges: BillingCharge[] = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now - i * 86400_000);
+    const unpaid = billingOverdue && i < 3;
+    return {
+      id: 600 - i,
+      category: 'Grocery',
+      frequency: 'daily' as const,
+      period_start: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+      amount: '10.00',
+      status: unpaid ? ('failed' as const) : ('paid' as const),
+      status_display: unpaid ? 'Unpaid (insufficient balance)' : 'Paid',
+      attempts: 1,
+      last_error: unpaid ? 'Insufficient wallet balance.' : '',
+      paid_at: unpaid ? null : new Date(d.getTime() + 6 * 3600_000).toISOString(),
+      note: '',
+    };
+  });
+  let billingPausedAt: string | null = billingOverdue ? iso(60) : null;
 
   let balance = 12450.5;
   const transactions: WalletTransaction[] = Array.from({ length: 14 }, (_, i) => ({
@@ -537,6 +566,34 @@ export function createMockDb() {
           return { date: d, orders: os.length, order_revenue: orev.toFixed(2), bookings: bs.length, booking_revenue: brev.toFixed(2), revenue: (orev + brev).toFixed(2) };
         }),
       };
+    },
+    /** Mirrors vendor_dashboard/api/billing.py. */
+    billing(): BillingState {
+      const selected = shopCategoryOptions.filter((c) => shopCategoryIds.includes(c.id) && c.subscription);
+      const perMonth = { daily: 30, weekly: 30 / 7, monthly: 1 } as const;
+      const unpaid = billingCharges.filter((c) => c.status === 'failed' || c.status === 'pending');
+      return {
+        plans: selected.map((c) => ({ category_id: c.id, category: c.name, cost: c.subscription!.cost, frequency: c.subscription!.frequency, grace_days: c.subscription!.grace_days, description: '' })),
+        monthly_estimate: selected.reduce((s, c) => s + Number(c.subscription!.cost) * perMonth[c.subscription!.frequency], 0).toFixed(2),
+        due: unpaid.reduce((s, c) => s + Number(c.amount), 0).toFixed(2),
+        unpaid_count: unpaid.length,
+        oldest_unpaid: unpaid.length ? unpaid[unpaid.length - 1].period_start : null,
+        paused: billingPausedAt !== null,
+        paused_at: billingPausedAt,
+        wallet_balance: (billingOverdue && unpaid.length ? 0 : balance).toFixed(2),
+        charges: billingCharges,
+      };
+    },
+    settleBilling(): [number, unknown] {
+      const unpaid = billingCharges.filter((c) => c.status === 'failed' || c.status === 'pending');
+      if (!unpaid.length) return [400, { detail: 'Nothing is due.' }];
+      const due = unpaid.reduce((s, c) => s + Number(c.amount), 0);
+      if (balance < due) return [409, { ...db.billing(), detail: 'Your wallet balance is not enough for the oldest due charge. Add money to your wallet first.' }];
+      balance -= due;
+      unpaid.forEach((c) => Object.assign(c, { status: 'paid', status_display: 'Paid', paid_at: new Date().toISOString(), last_error: '' }));
+      const reopened = billingPausedAt !== null;
+      billingPausedAt = null;
+      return [200, { ...db.billing(), paid_count: unpaid.length, paid_amount: due.toFixed(2), shop_reopened: reopened }];
     },
     /** Mirrors vendor_dashboard/api/customers.py: one row per customer (by phone in the mock). */
     customers(): (CustomerRow & { orders: CustomerDetail['orders']; bookings: CustomerDetail['bookings'] })[] {

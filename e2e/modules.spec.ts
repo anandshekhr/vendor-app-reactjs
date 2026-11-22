@@ -106,3 +106,14 @@ test('reports: hybrid vendor gets sales and bookings & staff tabs', async ({ pag
   await page.getByRole('tab', { name: 'Bookings & staff' }).click();
   await expect(page.getByRole('heading', { name: 'Staff performance' })).toBeVisible();
 });
+
+test('billing: overdue dues pause the shop until paid from the wallet', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('tnbs.mock.billing', 'overdue'));
+  await login(page);
+  const banner = page.getByRole('alert').filter({ hasText: 'Your shop is not taking orders' });
+  await expect(banner).toBeVisible();
+  await banner.getByRole('link', { name: 'Pay now' }).click();
+  await expect(page.getByRole('heading', { name: 'Subscription & billing' })).toBeVisible();
+  await expect(page.getByText('Grocery').first()).toBeVisible();
+  await expect(page.getByText('Unpaid (insufficient balance)').first()).toBeVisible();
+});

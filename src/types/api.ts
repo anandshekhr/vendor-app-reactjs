@@ -1120,3 +1120,35 @@ export interface ReportSummary extends ReportHeadline {
   staff: { provider_id: number; name: string; bookings: number; completed: number; revenue: Decimal }[];
   daily: { date: string; orders: number; order_revenue: Decimal; bookings: number; booking_revenue: Decimal; revenue: Decimal }[];
 }
+
+// ─── Subscription & billing (GET /vendor/dashboard/api/billing/) ────────────
+
+export interface BillingCharge {
+  id: number;
+  category: string;
+  frequency: 'daily' | 'weekly' | 'monthly';
+  period_start: string;
+  amount: Decimal;
+  status: 'pending' | 'paid' | 'failed' | 'waived';
+  status_display: string;
+  attempts: number;
+  last_error: string;
+  paid_at: ISODateTime | null;
+  note: string;
+}
+
+export interface BillingState {
+  plans: { category_id: number; category: string; cost: Decimal; frequency: 'daily' | 'weekly' | 'monthly'; grace_days: number; description: string }[];
+  monthly_estimate: Decimal;
+  due: Decimal;
+  unpaid_count: number;
+  oldest_unpaid: string | null;
+  /** The shop stopped accepting orders because dues are past their grace period. */
+  paused: boolean;
+  paused_at: ISODateTime | null;
+  wallet_balance: Decimal;
+  charges: BillingCharge[];
+  paid_count?: number;
+  paid_amount?: Decimal;
+  shop_reopened?: boolean;
+}

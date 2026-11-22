@@ -54,6 +54,8 @@ on('GET', '/vendor/dashboard/api/store/profile/', ({ db }) => {
   return [200, db.shop];
 });
 on('GET', '/vendor/dashboard/api/store/categories/', ({ db }) => [200, db.shopCategories()]);
+on('GET', '/vendor/dashboard/api/billing/', ({ db }) => [200, db.billing()]);
+on('POST', '/vendor/dashboard/api/billing/settle/', ({ db }) => db.settleBilling());
 on('GET', '/vendor/dashboard/api/reports/summary/', ({ db, query }) => {
   const to = query.get('to') ?? new Date().toISOString().slice(0, 10);
   const from = query.get('from') ?? to;

@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from '@/hooks/store';
 import { Drawer, FullPageSpinner } from '@/components/ui';
 import { ErrorBoundary } from '@/components/feedback/ErrorBoundary';
 import { OfflineBanner } from '@/components/feedback/OfflineBanner';
+import { DuesBanner } from '@/features/billing/DuesBanner';
 import { useActivityPolling } from '@/features/notifications/useActivityPolling';
 import { useOfflineSync } from '@/features/offline-sync/useOfflineSync';
 import { usePushNotifications } from '@/services/push/usePushNotifications';
@@ -36,6 +37,7 @@ export function AppShell() {
       </Drawer>
       <div className="flex min-w-0 flex-1 flex-col">
         <OfflineBanner />
+        <DuesBanner />
         <Topbar />
         <main id="main" className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1400px] px-3 py-5 sm:px-5 lg:px-6">

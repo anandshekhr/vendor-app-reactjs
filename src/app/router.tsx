@@ -52,6 +52,7 @@ const DocumentsPage = page(() => import('@/features/profile/DocumentsPage'), 'Do
 const SettingsPage = page(() => import('@/features/profile/SettingsPage'), 'SettingsPage');
 const PrinterSettingsPage = page(() => import('@/features/printer/PrinterSettingsPage'), 'PrinterSettingsPage');
 const NotificationsPage = page(() => import('@/features/notifications/NotificationsPage'), 'NotificationsPage');
+const BillingPage = page(() => import('@/features/billing/BillingPage'), 'BillingPage');
 const ReportsPage = page(() => import('@/features/reports/ReportsPage'), 'ReportsPage');
 
 const gated = (capability: Capability, element: ReactNode) => <RequireCapability capability={capability}>{element}</RequireCapability>;
@@ -118,6 +119,7 @@ export const routes: RouteObject[] = [
       { path: 'profile/business', element: <ProfilePage /> },
       { path: 'profile/documents', element: <DocumentsPage /> },
       { path: 'profile/qr', element: <QrPage /> },
+      { path: 'billing', element: gated('wallet', <BillingPage />) },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'settings/printer', element: <PrinterSettingsPage /> },
       { path: 'notifications', element: <NotificationsPage /> },

@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Receipt,
   Bell,
   Boxes,
   CalendarClock,
@@ -82,6 +83,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Wallet', to: '/wallet', icon: Wallet, capability: 'wallet' },
       { label: 'Withdrawals', to: '/wallet/withdrawals', icon: ArrowDownToLine, capability: 'wallet' },
       { label: 'Bank accounts', to: '/bank-accounts', icon: Landmark, capability: 'wallet' },
+      { label: 'Subscription & billing', to: '/billing', icon: Receipt, capability: 'wallet' },
       { label: 'Reports', to: '/reports', icon: BarChart3, capability: 'reports' },
     ],
   },
