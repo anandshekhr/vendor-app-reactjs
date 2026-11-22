@@ -18,6 +18,7 @@ export function usePushNotifications() {
       const body = payload.notification?.body ?? payload.data?.message ?? payload.data?.body;
       toast.info(title, body);
       const type = payload.data?.type;
+      dispatch(api.util.invalidateTags(['Notifications']));
       if (type === 'new_order') dispatch(api.util.invalidateTags([{ type: 'Orders', id: 'LIST' }, 'Dashboard']));
       if (type === 'new_booking') dispatch(api.util.invalidateTags([{ type: 'Bookings', id: 'LIST' }, 'ServiceDashboard']));
     });

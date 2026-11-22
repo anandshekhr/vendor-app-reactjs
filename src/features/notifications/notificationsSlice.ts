@@ -1,9 +1,9 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 /**
- * The backend has no vendor notification feed (API_MAPPING G-14). Notifications are generated on this device from
- * real server data (new orders/bookings from the poll endpoints, low stock from the dashboard, sync outcomes) and
- * their read state is stored locally.
+ * Notifications noticed on this device (offline-sale sync results, low stock, and new orders/bookings from polling).
+ * The server's notification centre (features/notifications/api.ts) is the main feed; new orders/bookings are taken
+ * from it, so only DEVICE_ONLY categories from here are shown next to it.
  */
 export type NotificationCategory =
   | 'new_order'
@@ -15,6 +15,9 @@ export type NotificationCategory =
   | 'withdrawal'
   | 'message'
   | 'verification';
+
+/** Categories only this device knows about (shown next to the server feed). */
+export const DEVICE_ONLY: NotificationCategory[] = ['sync', 'low_stock', 'message', 'verification', 'order_cancelled', 'booking_cancelled'];
 
 export interface AppNotification {
   id: string;

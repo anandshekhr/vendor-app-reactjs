@@ -2,6 +2,7 @@
 import { allowedBookingActions } from '@/features/bookings/transitions';
 import type {
   ApplicantApplication,
+  ServerNotification,
   CustomerDetail,
   CustomerRow,
   ShopCategories,
@@ -243,6 +244,12 @@ export function createMockDb() {
   const posKeys = new Map<string, number>();
   const withdrawalKeys = new Map<string, number>();
 
+  const serverNotifications: ServerNotification[] = [
+    { id: 3, type: 'new_order', title: 'Order Created', body: 'New order TNBS-1094 has been created.', link: '/orders/1094', is_read: false, created_at: iso(5) },
+    { id: 2, type: 'billing', title: 'Subscription paid', body: 'Grocery: ₹10.00 for today.', link: '/billing', is_read: false, created_at: iso(240) },
+    { id: 1, type: 'withdrawal', title: 'Withdrawal paid', body: '₹1500.00 has been sent to your bank account.', link: '/wallet/withdrawals', is_read: true, created_at: iso(3000) },
+  ];
+
   let balance = 12450.5;
   const transactions: WalletTransaction[] = Array.from({ length: 14 }, (_, i) => ({
     id: 900 - i,
@@ -367,6 +374,7 @@ export function createMockDb() {
     availability,
     bookings,
     stockMovements,
+    serverNotifications,
     transactions,
     get bankAccounts() {
       return bankAccounts;

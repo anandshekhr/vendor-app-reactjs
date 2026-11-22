@@ -280,7 +280,7 @@ branch; older servers simply keep returning full numbers.
 | G-11 | ~~Withdrawal race / no idempotency / unverified accounts allowed~~ **Resolved** in `claude/vendor-backend-hardening`: locked wallet, pending requests reserved, verified own accounts only, `Idempotency-Key`. (The v2 endpoint also skipped its checks entirely before.) Remaining: published limits/fees. | `GET /api/v2/vendors/withdrawals/config/` | Low |
 | G-12 | ~~No vendor customer API~~ **Resolved** in api-services `claude/vendor-modules`: `GET /vendor/dashboard/api/customers/` (one row per customer from orders, POS sales and bookings; search, sort, paging, totals; masking-aware) and `customers/<key>/`. | — | Done |
 | G-13 | ~~Chat endpoints broken & unscoped, no realtime~~ **Resolved** in api-services `a33a7cc` (conversations API, participant checks, read receipts, attachments, Channels WebSocket). Remaining: vendors cannot start a conversation. | Allow vendor-initiated threads for their own orders/bookings | Low |
-| G-14 | No notification feed | `GET /vendor/dashboard/api/notifications/`, `POST .../<id>/read/`, `POST .../read-all/` | Medium Push: the portal now registers an FCM web token (`/api/v2/notifications/device/register/`) and the API pushes new orders/bookings with a link to them. |
+| G-14 | ~~No notification feed~~ **Resolved** in api-services `claude/vendor-modules`: `GET /vendor/dashboard/api/notifications/` (unread filter, unread counts per type), `<id>/read/`, `read-all/`; written for new orders/bookings, billing notices and withdrawal payouts/rejections, each also pushed (FCM) with a link into the portal. | — | Done |
 
 ## Security findings (backend)
 

@@ -71,3 +71,18 @@ test('customers: server directory with masked contacts and a detail page', async
   await expect(page.getByRole('heading', { name: 'Priya Sharma' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Orders', exact: true })).toBeVisible();
 });
+
+test('notifications: server feed, unread filter, open and mark all read', async ({ page }) => {
+  await login(page);
+  await expect(page.getByRole('link', { name: /Notifications, \d+ unread/ })).toBeVisible();
+  await page.goto('/notifications');
+  await expect(page.getByText('Withdrawal paid')).toBeVisible();
+  await page.getByRole('tab', { name: /Unread/ }).click();
+  await expect(page.getByText('Withdrawal paid')).toHaveCount(0);
+  await expect(page.getByText('Subscription paid')).toBeVisible();
+  await page.getByRole('button', { name: 'Mark all read' }).click();
+  await expect(page.getByText('No unread notifications')).toBeVisible();
+  await page.getByRole('tab', { name: 'All' }).click();
+  await page.getByText('Order Created').click();
+  await expect(page).toHaveURL(/\/orders\/1094$/);
+});

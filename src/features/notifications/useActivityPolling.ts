@@ -62,7 +62,7 @@ export function useActivityPolling() {
                 ),
               );
               dispatch(orderBaselineSet(res.latest_id));
-              dispatch(ordersApi.util.invalidateTags([{ type: 'Orders', id: 'LIST' }, 'Dashboard']));
+              dispatch(ordersApi.util.invalidateTags([{ type: 'Orders', id: 'LIST' }, 'Dashboard', 'Notifications']));
               void autoPrintNewOrders(dispatch, res.orders.map((o) => o.id), businessRef.current);
             }
           }
@@ -96,7 +96,7 @@ export function useActivityPolling() {
               );
               dispatch(bookingBaselineSet(res.latest_id));
               void autoPrintNewBookings(res.bookings, businessRef.current);
-              dispatch(bookingsApi.util.invalidateTags([{ type: 'Bookings', id: 'LIST' }, 'ServiceDashboard']));
+              dispatch(bookingsApi.util.invalidateTags([{ type: 'Bookings', id: 'LIST' }, 'ServiceDashboard', 'Notifications']));
             }
           }
         } catch {

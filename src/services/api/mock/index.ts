@@ -54,6 +54,25 @@ on('GET', '/vendor/dashboard/api/store/profile/', ({ db }) => {
   return [200, db.shop];
 });
 on('GET', '/vendor/dashboard/api/store/categories/', ({ db }) => [200, db.shopCategories()]);
+on('GET', '/vendor/dashboard/api/notifications/', ({ db, query }) => {
+  const all = db.serverNotifications;
+  const rows = query.get('unread') ? all.filter((n) => !n.is_read) : all;
+  const unread = all.filter((n) => !n.is_read);
+  const byType: Record<string, number> = {};
+  unread.forEach((n) => (byType[n.type] = (byType[n.type] ?? 0) + 1));
+  return [200, { ...paginate(rows, query, 20), unread_count: unread.length, unread_by_type: byType }];
+});
+on('POST', '/vendor/dashboard/api/notifications/read-all/', ({ db }) => {
+  const n = db.serverNotifications.filter((x) => !x.is_read);
+  n.forEach((x) => (x.is_read = true));
+  return [200, { marked_read: n.length }];
+});
+on('POST', '/vendor/dashboard/api/notifications/:id/read/', ({ db, params }) => {
+  const n = db.serverNotifications.find((x) => x.id === Number(params.id));
+  if (!n) return [404, { detail: 'Not found.' }];
+  n.is_read = true;
+  return [200, n];
+});
 on('GET', '/vendor/dashboard/api/customers/', ({ db, query }) => {
   const q = (query.get('q') ?? '').toLowerCase();
   let rows = db.customers().filter((c) => !q || c.name.toLowerCase().includes(q) || (!c.contact_masked && c.phone.replace(/\D/g, '').includes(q.replace(/\D/g, '') || '~')));

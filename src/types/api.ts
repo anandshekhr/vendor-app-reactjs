@@ -1070,3 +1070,27 @@ export interface CustomerDetail extends CustomerRow {
   orders: { id: number; status: string; source: string; total_amount: Decimal; created_at: ISODateTime }[];
   bookings: { id: number; status: string; service_name: string; total_amount: Decimal; start_time: ISODateTime }[];
 }
+
+// ─── Notification centre (GET /vendor/dashboard/api/notifications/) ─────────
+
+export type ServerNotificationType = 'new_order' | 'new_booking' | 'billing' | 'withdrawal' | 'stock' | 'account';
+
+export interface ServerNotification {
+  id: number;
+  type: ServerNotificationType;
+  title: string;
+  body: string;
+  /** A path inside the portal, or ''. */
+  link: string;
+  is_read: boolean;
+  created_at: ISODateTime;
+}
+
+export interface ServerNotificationList {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  unread_count: number;
+  unread_by_type: Partial<Record<ServerNotificationType, number>>;
+  results: ServerNotification[];
+}
