@@ -29,6 +29,7 @@ const PosPage = page(() => import('@/features/pos/PosPage'), 'PosPage');
 const PosSalesPage = page(() => import('@/features/pos/PosSalesPage'), 'PosSalesPage');
 const PosSaleDetailPage = page(() => import('@/features/pos/PosSaleDetailPage'), 'PosSaleDetailPage');
 const CustomersPage = page(() => import('@/features/customers/CustomersPage'), 'CustomersPage');
+const CustomerDetailPage = page(() => import('@/features/customers/CustomerDetailPage'), 'CustomerDetailPage');
 const ChatPage = page(() => import('@/features/chat/ChatPage'), 'ChatPage');
 const ServicesPage = page(() => import('@/features/services/ServicesPage'), 'ServicesPage');
 const ServiceFormPage = page(() => import('@/features/services/ServiceFormPage'), 'ServiceFormPage');
@@ -103,6 +104,7 @@ export const routes: RouteObject[] = [
       { path: 'availability', element: gated('availability', <AvailabilityPage />) },
 
       { path: 'customers', element: gated('customers', <CustomersPage />) },
+      { path: 'customers/:key', element: gated('customers', <CustomerDetailPage />) },
       { path: 'chat', element: gated('chat', <ChatPage />) },
       { path: 'chat/:conversationId', element: gated('chat', <ChatPage />) },
 

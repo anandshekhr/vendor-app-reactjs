@@ -57,3 +57,17 @@ test('self-registration: a hybrid application needs a product and a service cate
   await expect(page.getByText('Hours & staff').first()).toBeVisible();
   await expect(page.getByText('Starter products').first()).toBeVisible();
 });
+
+test('customers: server directory with masked contacts and a detail page', async ({ page }) => {
+  await login(page);
+  await page.goto('/customers');
+  await expect(page.getByRole('heading', { name: 'Customers', exact: true })).toBeVisible();
+  const priya = page.getByRole('row').filter({ hasText: 'Priya Sharma' });
+  await expect(priya).toBeVisible();
+  await page.getByRole('combobox', { name: 'Sort customers' }).selectOption('-spend');
+  await page.getByLabel('Search customers').fill('Priya');
+  await expect(page.getByRole('row').filter({ hasText: 'Priya Sharma' })).toHaveCount(1);
+  await page.getByRole('row').filter({ hasText: 'Priya Sharma' }).click();
+  await expect(page.getByRole('heading', { name: 'Priya Sharma' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Orders', exact: true })).toBeVisible();
+});

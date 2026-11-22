@@ -2,6 +2,8 @@
 import { allowedBookingActions } from '@/features/bookings/transitions';
 import type {
   ApplicantApplication,
+  CustomerDetail,
+  CustomerRow,
   ShopCategories,
   ShopCategoryOption,
   StockMovement,
@@ -437,6 +439,45 @@ export function createMockDb() {
         phone: masked ? mask(o.customer_phone) : o.customer_phone,
         address: masked && o.customer_address ? { ...o.customer_address, phone_number: mask((o.customer_address as { phone_number?: string }).phone_number) } : o.customer_address,
       };
+    },
+    /** Mirrors vendor_dashboard/api/customers.py: one row per customer (by phone in the mock). */
+    customers(): (CustomerRow & { orders: CustomerDetail['orders']; bookings: CustomerDetail['bookings'] })[] {
+      const map = new Map<string, CustomerRow & { orders: CustomerDetail['orders']; bookings: CustomerDetail['bookings']; visible: boolean; raw: string }>();
+      const row = (phone: string, name: string) => {
+        const digits = phone.replace(/\D/g, '').slice(-10);
+        if (digits.length < 10) return null;
+        const key = `p${digits}`;
+        if (!map.has(key)) {
+          map.set(key, { key, name, phone, raw: phone, contact_masked: false, visible: false, orders_count: 0, bookings_count: 0, total_spend: '0.00', last_activity_at: null, last_order_id: null, last_booking_id: null, orders: [], bookings: [] });
+        }
+        return map.get(key)!;
+      };
+      for (const o of orders) {
+        const c = row(o.customer_phone ?? '', o.customer_name);
+        if (!c) continue;
+        c.orders_count += 1;
+        c.visible = c.visible || !db.contactPrivacy(o).masked;
+        if (o.status === 'delivered') c.total_spend = (Number(c.total_spend) + Number(o.total_amount)).toFixed(2);
+        if (!c.last_activity_at || o.created_at > c.last_activity_at) c.last_activity_at = o.created_at;
+        c.last_order_id = Math.max(c.last_order_id ?? 0, o.id);
+        c.orders.push({ id: o.id, status: o.status, source: o.source ?? 'online', total_amount: o.total_amount, created_at: o.created_at });
+      }
+      for (const b of bookings) {
+        const c = row(b.customer_phone, b.customer_name);
+        if (!c) continue;
+        c.bookings_count += 1;
+        c.visible = c.visible || b.status === 'SCHEDULED' || b.status === 'IN_PROGRESS';
+        if (b.status === 'COMPLETED') c.total_spend = (Number(c.total_spend) + Number(b.total_amount)).toFixed(2);
+        const created = (b as { created_at?: string }).created_at ?? b.start_time;
+        if (!c.last_activity_at || created > c.last_activity_at) c.last_activity_at = created;
+        c.last_booking_id = Math.max(c.last_booking_id ?? 0, b.id);
+        c.bookings.push({ id: b.id, status: b.status, service_name: b.service_name, total_amount: b.total_amount, start_time: b.start_time });
+      }
+      return [...map.values()].map(({ visible, raw, ...c }) => ({
+        ...c,
+        contact_masked: !visible,
+        phone: visible ? raw : `${raw.replace(/\D/g, '').length > 10 ? '+91' : ''}${'\u2022'.repeat(7)}${raw.replace(/\D/g, '').slice(-3)}`,
+      }));
     },
     orderListItem: (o: VendorOrderFull) => ({
       id: o.id,

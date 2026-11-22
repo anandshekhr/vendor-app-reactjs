@@ -54,6 +54,30 @@ on('GET', '/vendor/dashboard/api/store/profile/', ({ db }) => {
   return [200, db.shop];
 });
 on('GET', '/vendor/dashboard/api/store/categories/', ({ db }) => [200, db.shopCategories()]);
+on('GET', '/vendor/dashboard/api/customers/', ({ db, query }) => {
+  const q = (query.get('q') ?? '').toLowerCase();
+  let rows = db.customers().filter((c) => !q || c.name.toLowerCase().includes(q) || (!c.contact_masked && c.phone.replace(/\D/g, '').includes(q.replace(/\D/g, '') || '~')));
+  const ordering = query.get('ordering') ?? '-last_activity';
+  rows = rows.sort((a, b) =>
+    ordering === '-spend' ? Number(b.total_spend) - Number(a.total_spend)
+      : ordering === '-orders' ? b.orders_count + b.bookings_count - (a.orders_count + a.bookings_count)
+        : ordering === 'name' ? a.name.localeCompare(b.name)
+          : (b.last_activity_at ?? '').localeCompare(a.last_activity_at ?? ''),
+  );
+  const list = rows.map(({ orders: _o, bookings: _b, ...c }) => c);
+  return [200, {
+    ...paginate(list, query, 20),
+    totals: {
+      customers: list.length,
+      repeat_customers: list.filter((c) => c.orders_count + c.bookings_count > 1).length,
+      total_spend: list.reduce((s, c) => s + Number(c.total_spend), 0).toFixed(2),
+    },
+  }];
+});
+on('GET', '/vendor/dashboard/api/customers/:key/', ({ db, params }) => {
+  const c = db.customers().find((x) => x.key === params.key);
+  return c ? [200, c] : [404, { detail: 'No such customer at this shop.' }];
+});
 on('PUT', '/vendor/dashboard/api/store/categories/', ({ db, body }) => db.setShopCategories(body?.category_ids));
 on('PATCH', '/vendor/dashboard/api/store/profile/', ({ db, body }) => {
   if (!(body instanceof FormData)) Object.assign(db.shop, body);

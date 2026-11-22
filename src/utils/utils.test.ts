@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateCustomers } from '@/features/customers/aggregate';
 import { createScanGate } from '@/services/scanner/dedupe';
 import { toCsv } from './csv';
 import { maskTail, formatCurrency } from './format';
@@ -29,15 +28,5 @@ describe('utils', () => {
     expect(gate('B')).toBe(true);
     t = 2000;
     expect(gate('B')).toBe(true);
-  });
-  it('builds a customer directory from orders, excluding cancelled spend', () => {
-    const rows = aggregateCustomers([
-      { id: 1, customer_name: 'Asha', customer_phone: '+919876543210', items_count: 1, total_amount: '100', status: 'delivered', status_display: '', is_paid: true, created_at: '2026-10-01T10:00:00Z' },
-      { id: 2, customer_name: 'Asha', customer_phone: '9876543210', items_count: 1, total_amount: '50', status: 'cancelled', status_display: '', is_paid: false, created_at: '2026-10-02T10:00:00Z' },
-      { id: 3, customer_name: '', customer_phone: '', items_count: 1, total_amount: '20', status: 'delivered', status_display: '', is_paid: true, created_at: '2026-10-03T10:00:00Z' },
-    ]);
-    expect(rows).toHaveLength(2);
-    const asha = rows.find((r) => r.phone === '9876543210')!;
-    expect(asha).toMatchObject({ orders: 2, completedSpend: 100, lastOrderId: 2 });
   });
 });

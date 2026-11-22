@@ -1039,3 +1039,34 @@ export interface PrintDocumentLink {
   expires_at: ISODateTime;
   previewable: boolean;
 }
+
+// ─── Customers (GET /vendor/dashboard/api/customers/) ───────────────────────
+
+export interface CustomerRow {
+  /** `u<user id>` for account holders, `p<last 10 digits>` for POS customers without an account. */
+  key: string;
+  name: string;
+  /** Masked (e.g. +91•••••••678) when contact_masked. */
+  phone: string;
+  contact_masked: boolean;
+  orders_count: number;
+  bookings_count: number;
+  /** Delivered orders + completed bookings. */
+  total_spend: Decimal;
+  last_activity_at: ISODateTime | null;
+  last_order_id: number | null;
+  last_booking_id: number | null;
+}
+
+export interface CustomerList {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: CustomerRow[];
+  totals: { customers: number; repeat_customers: number; total_spend: Decimal };
+}
+
+export interface CustomerDetail extends CustomerRow {
+  orders: { id: number; status: string; source: string; total_amount: Decimal; created_at: ISODateTime }[];
+  bookings: { id: number; status: string; service_name: string; total_amount: Decimal; start_time: ISODateTime }[];
+}
