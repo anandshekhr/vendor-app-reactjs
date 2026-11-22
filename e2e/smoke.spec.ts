@@ -334,3 +334,33 @@ test('printing: preview a customer PDF page by page inside the portal', async ({
   await expect(dialog.getByRole('button', { name: 'Next page' })).toBeDisabled();
   expect(errors).toEqual([]);
 });
+
+test('printing: a paired printer prints accepted orders automatically', async ({ page }) => {
+  const errors = await login(page);
+  await page.goto('/printing/settings');
+  const printers = page.getByRole('main');
+  await expect(printers.getByText('Counter printer', { exact: true })).toBeVisible();
+  await expect(printers.getByText('Online', { exact: true })).toBeVisible();
+  await page.getByRole('checkbox', { name: 'Print accepted orders automatically on Counter printer' }).check();
+  await expect(page.getByText('Counter printer prints accepted orders automatically')).toBeVisible();
+
+  // Pairing a new printer shows a code for the agent.
+  await page.getByRole('button', { name: 'Add printer' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Name').fill('Colour printer');
+  await dialog.getByRole('checkbox', { name: 'Prints in colour' }).check();
+  await dialog.getByRole('button', { name: 'Save printer' }).click();
+  await expect(printers.getByText('Not paired')).toBeVisible();
+  await page.getByRole('button', { name: 'Pair agent' }).click();
+  await expect(page.getByLabel('Pairing code')).toHaveText('K7QM-3XPA');
+  await page.keyboard.press('Escape');
+
+  // Accepting an order sends it to the counter printer (navigate in the app: the mock API lives in the page).
+  await openNav(page);
+  await page.getByRole('navigation', { name: 'Main navigation' }).last().getByRole('link', { name: /Printing orders/ }).click();
+  await page.getByText('PRT-NEW-PICKUP').click();
+  await page.getByRole('button', { name: 'Accept', exact: true }).click();
+  await expect(page.getByText('Waiting for Counter printer')).toBeVisible();
+  await expect(page.getByText(/Sent to Counter printer automatically/).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});

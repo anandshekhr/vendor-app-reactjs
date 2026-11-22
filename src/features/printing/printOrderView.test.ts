@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FULFILMENT_STEPS, formatBytes, parsePickupInput, printOptionsSummary, selectedPages, stepIndex } from './printOrderView';
+import { FULFILMENT_STEPS, formatBytes, parsePickupInput, jobStationText, printOptionsSummary, selectedPages, stationSummary, stepIndex } from './printOrderView';
 
 describe('printing order view helpers', () => {
   it('follows separate steps for pickup and delivery', () => {
@@ -41,5 +41,15 @@ describe('selectedPages (matches the server pricing)', () => {
     expect(list('', 3)).toEqual([1, 2, 3]);
     expect(list('a-b', 3)).toEqual([1, 2, 3]);
     expect(list('7-9', 3)).toEqual([1, 2, 3]);
+  });
+});
+
+describe('print station helpers', () => {
+  it('says where an auto-printed job is', () => {
+    expect(jobStationText({ station_name: 'Counter printer', status: 'QUEUED' })).toBe('Waiting for Counter printer');
+    expect(jobStationText({ station_name: 'Counter printer', status: 'FAILED' })).toBe('Failed on Counter printer');
+  });
+  it('summarises what a printer can do', () => {
+    expect(stationSummary({ supports_color: false, supports_duplex: true, paper_sizes: ['A4', 'A3'] })).toBe('Black & white only · double-sided · A4, A3');
   });
 });

@@ -5,6 +5,7 @@ export const TAGS = [
   'PrintOrder',
   'PrintOrders',
   'PrintSettings',
+  'PrintStations',
   'PrintRateCards',
   'Me',
   'Shop',

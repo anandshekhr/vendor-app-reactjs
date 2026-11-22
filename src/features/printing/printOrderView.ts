@@ -1,5 +1,5 @@
 import type { BadgeTone } from '@/components/ui';
-import type { PrintDeliveryState, PrintFulfilmentType, PrintOrderFile, PrintOrderStatus } from '@/types/api';
+import type { PrintDeliveryState, PrintFulfilmentType, PrintJob, PrintOrderFile, PrintOrderStatus, PrintStation } from '@/types/api';
 
 /** The steps each fulfilment type goes through after the order is confirmed (mirrors the API's status machine). */
 export const FULFILMENT_STEPS: Record<PrintFulfilmentType, { status: PrintOrderStatus; label: string }[]> = {
@@ -120,4 +120,18 @@ export function selectedPages(pageRange: string, totalPages: number): Set<number
     for (let p = Math.max(start, 1); p <= Math.min(end, totalPages); p++) picked.add(p);
   }
   return picked.size ? picked : all;
+}
+
+/** Where an agent-printed job is: waiting for the printer, printing, or done there. */
+export function jobStationText(job: Pick<PrintJob, 'station_name' | 'status'>): string {
+  const at = job.station_name ?? 'the printer';
+  if (job.status === 'QUEUED') return `Waiting for ${at}`;
+  if (job.status === 'PRINTING') return `Printing on ${at}`;
+  if (job.status === 'PRINTED') return `Printed on ${at}`;
+  return `Failed on ${at}`;
+}
+
+/** What a print station can print, in a few words. */
+export function stationSummary(st: Pick<PrintStation, 'supports_color' | 'supports_duplex' | 'paper_sizes'>): string {
+  return [st.supports_color ? 'Colour' : 'Black & white only', st.supports_duplex ? 'double-sided' : 'single-sided', st.paper_sizes.join(', ')].join(' · ');
 }

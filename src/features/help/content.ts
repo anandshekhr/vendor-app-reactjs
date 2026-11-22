@@ -276,6 +276,16 @@ export const HELP_TOPICS: HelpTopic[] = [
           { label: 'Prices & settings', to: '/printing/settings' },
         ],
       },
+      {
+        id: 'auto-print-orders',
+        q: 'Can printing orders print by themselves when I accept them?',
+        a: [
+          'Yes, with the TNBS Print Agent on a Windows PC connected to your printer. Go to Printing orders → Prices & settings → Printers, add your printer, press Pair agent and type the code into the agent. Then tick “Print accepted orders automatically”. Ask the TheNearByShop team for the agent installer.',
+          'From then on, each delivery or pickup order prints as soon as it’s accepted (by you, or automatically if auto-accept is on). PDF and image files print; Word and other files, or colour/double-sided pages your printer can’t do, you print by hand. Check the prints, then mark the order ready as usual.',
+          'If the printer jams or runs out of paper, you get a notification and the order waits: fix the printer and press Send again on the print job. Nothing is printed twice: if you print a document by hand and mark it printed first, the printer skips it.',
+        ],
+        links: [{ label: 'Prices & settings', to: '/printing/settings' }],
+      },
     ],
   },
   {

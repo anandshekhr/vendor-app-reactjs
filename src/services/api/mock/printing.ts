@@ -5,6 +5,7 @@
  * Seeded pickup codes: PRT-READY-PICKUP → 246810, PRT-VERIFY-ME → 135790.
  */
 import type {
+  PrintStation,
   PrintDeliveryBlock,
   PrintFulfilmentType,
   PrintOrderDetail,
@@ -265,6 +266,49 @@ export function createPrintingMock() {
     return [200, view(o)];
   }
 
+  // Print stations (TNBS Print Agent). The counter printer is paired and online; auto-print starts off.
+  const stations: PrintStation[] = [
+    {
+      id: 1, name: 'Counter printer', code: 'mockstation1', qr_url: 'https://thenearbyshop.com/print/station/mockstation1',
+      supports_color: false, supports_duplex: true, paper_sizes: ['A4'], is_active: true, auto_print_orders: false,
+      is_paired: true, online: true, paired_at: new Date(Date.now() - 86_400_000).toISOString(), last_seen_at: new Date().toISOString(),
+      printer_name: 'HP LaserJet M1136', agent_version: '1.2.0', agent_status: 'Ready', created_at: new Date(Date.now() - 86_400_000 * 7).toISOString(),
+    },
+  ];
+
+  /** Like the API: an accepted delivery/pickup order goes to an auto-print station that can print it. */
+  function autoPrint(o: MockPrintOrder) {
+    const st = stations.find((x) => x.auto_print_orders && x.is_active && x.is_paired);
+    if (!st) return;
+    let sent = 0;
+    for (const job of o.print_jobs) {
+      const f = o.files.find((x) => x.id === job.file_id);
+      const printable = f && ['pdf', 'jpg', 'jpeg', 'png'].includes(f.file_type) && (f.color_mode === 'BW' || st.supports_color) && (f.sided === 'SINGLE' || st.supports_duplex) && st.paper_sizes.includes(f.paper_size);
+      if (!printable) continue;
+      Object.assign(job, { station_name: st.name, released_at: new Date().toISOString(), printer_name: st.printer_name });
+      sent++;
+    }
+    if (sent) move(o, 'PRINTING', `Sent to ${st.name} automatically.`);
+  }
+
+  function saveStation(body: Partial<PrintStation>, id?: number): Result {
+    if (id) {
+      const st = stations.find((x) => x.id === id);
+      if (!st) return [404, { detail: 'Not found.' }];
+      Object.assign(st, body);
+      return [200, st];
+    }
+    if (!body.name) return [400, { name: ['This field is required.'] }];
+    const st: PrintStation = {
+      id: Date.now(), name: String(body.name), code: `mock${Date.now()}`, qr_url: '', supports_color: Boolean(body.supports_color),
+      supports_duplex: Boolean(body.supports_duplex), paper_sizes: body.paper_sizes?.length ? body.paper_sizes : ['A4'], is_active: body.is_active ?? true,
+      auto_print_orders: Boolean(body.auto_print_orders), is_paired: false, online: false, paired_at: null, last_seen_at: null,
+      printer_name: '', agent_version: '', agent_status: '', created_at: new Date().toISOString(),
+    };
+    stations.push(st);
+    return [201, st];
+  }
+
   function act(id: string, action: string, body: Record<string, unknown> = {}): Result {
     const o = find(id);
     if (!o) return [404, { detail: 'Not found.' }];
@@ -274,6 +318,7 @@ export function createPrintingMock() {
         if (!can.includes('accept')) return conflict('Only new requests can be accepted.');
         move(o, 'RECEIVED', 'Accepted by the shop.');
         o.print_jobs = o.files.map((f, i) => ({ id: Date.now() + i, file_id: f.id, file_name: f.original_filename, status: 'QUEUED', printer_name: '', retry_count: 0, last_error: '', printed_at: null }));
+        autoPrint(o);
         break;
       case 'reject':
         if (!can.includes('reject')) return conflict('Only new requests and quotation requests can be rejected.');
@@ -361,6 +406,22 @@ export function createPrintingMock() {
   }
 
   return {
+    stations: (): Result => [200, stations],
+    saveStation,
+    deleteStation: (id: number): Result => {
+      const i = stations.findIndex((x) => x.id === id);
+      if (i < 0) return [404, { detail: 'Not found.' }];
+      stations.splice(i, 1);
+      return [204, null];
+    },
+    pairingCode: (id: number): Result =>
+      stations.some((x) => x.id === id) ? [200, { pairing_code: 'K7QM-3XPA', expires_at: new Date(Date.now() + 15 * 60_000).toISOString() }] : [404, { detail: 'Not found.' }],
+    unpair: (id: number): Result => {
+      const st = stations.find((x) => x.id === id);
+      if (!st) return [404, { detail: 'Not found.' }];
+      Object.assign(st, { is_paired: false, online: false, paired_at: null });
+      return [200, st];
+    },
     settings: (): Result => [200, settings],
     updateSettings: (body: Partial<PrintShopSettings>): Result => {
       Object.assign(settings, body);

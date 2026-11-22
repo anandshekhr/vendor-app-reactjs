@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/feedback/EmptyState';
 import { useToast } from '@/hooks/useToast';
 import { formatCurrency } from '@/utils/format';
 import type { PrintRateCard, PrintShopSettings } from '@/types/api';
+import { PrintersCard } from './PrintersCard';
 import { useDeleteRateCardMutation, useGetPrintSettingsQuery, useListRateCardsQuery, useSaveRateCardMutation, useUpdatePrintSettingsMutation } from './api';
 
 const COLOR = { BW: 'Black & white', COLOR: 'Colour' } as const;
@@ -21,6 +22,9 @@ export function PrintingSettingsPage() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
         <SettingsCard />
         <RateCardsCard />
+      </div>
+      <div className="mt-5">
+        <PrintersCard />
       </div>
     </>
   );
