@@ -4,7 +4,9 @@ import { Badge, Button, Card, CardBody, CardHeader, Dialog, Input, Skeleton } fr
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { useAppDispatch } from '@/hooks/store';
 import { useToast } from '@/hooks/useToast';
-import { businessTypeChanged } from '@/features/auth/authSlice';
+import { businessTypeChanged, printShopChanged } from '@/features/auth/authSlice';
+import { printingApi } from '@/features/printing/api';
+import { isApiError } from '@/services/api/errors';
 import { formatCurrency } from '@/utils/format';
 import type { CategorySubscription, ShopCategoryOption } from '@/types/api';
 import { useGetShopCategoriesQuery, useUpdateShopCategoriesMutation } from './api';
@@ -84,6 +86,15 @@ export function CategoriesCard() {
     try {
       const res = await save([...picked]).unwrap();
       dispatch(businessTypeChanged(res.business_type));
+      // Adding the printing category gives the shop its print shop profile on the server: show Printing at once.
+      dispatch(printingApi.endpoints.getPrintSettings.initiate(undefined, { forceRefetch: true }))
+        .unwrap()
+        .then(
+          () => dispatch(printShopChanged(true)),
+          (err) => {
+            if (isApiError(err) && err.status === 403) dispatch(printShopChanged(false));
+          },
+        );
       toast.success('Categories saved', `Your shop now offers: ${BUSINESS_TYPE_LABEL[res.business_type].toLowerCase()}.`);
       setOpen(false);
     } catch (err) {

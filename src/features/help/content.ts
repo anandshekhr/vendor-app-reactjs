@@ -89,6 +89,18 @@ export const HELP_TOPICS: HelpTopic[] = [
         links: [{ label: 'Subscription & billing', to: '/billing' }],
       },
       {
+        id: 'start-printing',
+        q: 'How do I start taking printing and photocopy orders?',
+        a: [
+          'Go to Business profile → Categories → Change categories, tick “Printing & Photocopy” and save. Printing orders appears in your menu straight away.',
+          'Then open Printing orders → Prices & settings and add your per-page prices (black & white or colour, paper size, single- or double-sided, binding) — at least black & white A4. Customers nearby can then upload documents to print; when an order doesn’t match any of your prices, you send them a quote instead.',
+        ],
+        links: [
+          { label: 'Change categories', to: '/profile' },
+          { label: 'Prices & settings', to: '/printing/settings' },
+        ],
+      },
+      {
         id: 'cannot-remove-category',
         q: 'Why can’t I remove a category?',
         a: [
@@ -257,11 +269,11 @@ export const HELP_TOPICS: HelpTopic[] = [
         id: 'print-orders',
         q: 'How do printing orders work?',
         a: [
-          'Customers upload documents and choose copies, colour and paper. You see them under Printing orders, send a quote when needed, print, and hand over by pickup code or to a delivery partner. Prices come from your rate cards in Printing settings.',
+          'Customers upload documents and choose copies, colour and paper. You see them under Printing orders, send a quote when needed, print, and hand over by pickup code or to a delivery partner. Prices come from your per-page prices under Printing orders → Prices & settings.',
         ],
         links: [
           { label: 'Printing orders', to: '/printing' },
-          { label: 'Printing settings', to: '/printing/settings' },
+          { label: 'Prices & settings', to: '/printing/settings' },
         ],
       },
     ],
