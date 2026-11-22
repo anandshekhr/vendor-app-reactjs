@@ -17,6 +17,12 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_APP_ID?: string;
   /** Web Push certificate key pair (Firebase console → Cloud Messaging → Web configuration). */
   readonly VITE_FIREBASE_VAPID_KEY?: string;
+  /** Vendor support contact on the Help page (optional; each is hidden when unset). */
+  readonly VITE_SUPPORT_PHONE?: string;
+  readonly VITE_SUPPORT_WHATSAPP?: string;
+  readonly VITE_SUPPORT_EMAIL?: string;
+  /** e.g. "Mon–Sat, 9 AM – 7 PM". */
+  readonly VITE_SUPPORT_HOURS?: string;
   /** Release version, set by the Docker build (Jenkins). */
   readonly VITE_APP_VERSION?: string;
 }

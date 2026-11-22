@@ -129,3 +129,19 @@ test('documents: re-upload a document for review', async ({ page }) => {
   const row = page.getByRole('listitem').filter({ hasText: 'GST Certificate' });
   await expect(row.getByText('In review')).toBeVisible();
 });
+
+test('help: searchable answers for this shop, linked to the right screen', async ({ page }) => {
+  const errors = await login(page);
+  await openNav(page);
+  await page.getByRole('navigation', { name: 'Main navigation' }).last().getByRole('link', { name: 'Help & FAQ' }).click();
+  await expect(page.getByRole('heading', { name: 'Help', exact: true })).toBeVisible();
+  await expect(page.getByText('What do I do with a new booking?')).toHaveCount(0); // product shop: no bookings topic
+  await page.getByLabel('Search help').fill('withdraw minimum');
+  await expect(page.getByText('How do I withdraw money to my bank?')).toBeVisible();
+  await expect(page.getByText(/minimum ₹100/)).toBeVisible();
+  await page.getByRole('main').getByRole('link', { name: 'Withdrawals', exact: true }).click();
+  await expect(page).toHaveURL(/\/wallet\/withdrawals$/);
+  await page.goto('/help#reopen-shop');
+  await expect(page.getByText('Open Subscription & billing and press Pay from wallet.', { exact: false })).toBeVisible();
+  expect(errors).toEqual([]);
+});

@@ -19,6 +19,10 @@ services:
         VITE_FIREBASE_MESSAGING_SENDER_ID: ${VITE_FIREBASE_MESSAGING_SENDER_ID:-}
         VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID:-}
         VITE_FIREBASE_VAPID_KEY: ${VITE_FIREBASE_VAPID_KEY:-}
+        VITE_SUPPORT_PHONE: ${VITE_SUPPORT_PHONE:-}
+        VITE_SUPPORT_WHATSAPP: ${VITE_SUPPORT_WHATSAPP:-}
+        VITE_SUPPORT_EMAIL: ${VITE_SUPPORT_EMAIL:-}
+        VITE_SUPPORT_HOURS: ${VITE_SUPPORT_HOURS:-}
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
     # Jenkins names each build tnbs-vendor-portal:staging-<version> and keeps the newest five, so
     # ACTION=rollback can start an earlier one without rebuilding.

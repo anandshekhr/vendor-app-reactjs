@@ -34,6 +34,13 @@ export const config = {
   // api-services dedupes POS checkouts by Idempotency-Key, so retries are safe. Set to 'false' only against an old API.
   posServerIdempotency: env.VITE_POS_SERVER_IDEMPOTENCY !== 'false',
   pollIntervalMs: num(env.VITE_POLL_INTERVAL_MS, 20000),
+  /** Vendor support contact shown on the Help page; each is hidden when unset. */
+  support: {
+    phone: (env.VITE_SUPPORT_PHONE ?? '').trim(),
+    whatsapp: (env.VITE_SUPPORT_WHATSAPP ?? '').trim(),
+    email: (env.VITE_SUPPORT_EMAIL ?? '').trim(),
+    hours: (env.VITE_SUPPORT_HOURS ?? '').trim(),
+  },
 } as const;
 
 export type AppConfig = typeof config;

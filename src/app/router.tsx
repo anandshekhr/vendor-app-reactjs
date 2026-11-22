@@ -53,6 +53,7 @@ const SettingsPage = page(() => import('@/features/profile/SettingsPage'), 'Sett
 const PrinterSettingsPage = page(() => import('@/features/printer/PrinterSettingsPage'), 'PrinterSettingsPage');
 const NotificationsPage = page(() => import('@/features/notifications/NotificationsPage'), 'NotificationsPage');
 const BillingPage = page(() => import('@/features/billing/BillingPage'), 'BillingPage');
+const HelpPage = page(() => import('@/features/help/HelpPage'), 'HelpPage');
 const ReportsPage = page(() => import('@/features/reports/ReportsPage'), 'ReportsPage');
 
 const gated = (capability: Capability, element: ReactNode) => <RequireCapability capability={capability}>{element}</RequireCapability>;
@@ -123,6 +124,7 @@ export const routes: RouteObject[] = [
       { path: 'settings', element: <SettingsPage /> },
       { path: 'settings/printer', element: <PrinterSettingsPage /> },
       { path: 'notifications', element: <NotificationsPage /> },
+      { path: 'help', element: <HelpPage /> },
       { path: 'reports', element: gated('reports', <ReportsPage />) },
       { path: '*', element: <NotFoundPage /> },
     ],

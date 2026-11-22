@@ -113,6 +113,14 @@ portal builds normally and Settings shows push as "Not set up". On the API, `VEN
 `https://vendor.thenearbyshop.com`) is where the notification links point. Code: `src/services/push/`,
 `public/firebase-messaging-sw.js`.
 
+### Help & FAQ page
+
+`/help` (menu: Business → Help & FAQ) answers common vendor questions, searchable, showing only the topics for the
+shop's business type. Answers live in `src/features/help/content.ts`; edit that file to add or change one (link a
+single answer as `/help#<question-id>`). The "Still need help?" card shows the vendor support contact from Jenkins'
+global environment: `VITE_SUPPORT_PHONE`, `VITE_SUPPORT_WHATSAPP`, `VITE_SUPPORT_EMAIL`, `VITE_SUPPORT_HOURS`
+(each optional and hidden when unset; the compose files pass them into the build).
+
 ## Printer setup and auto-print
 
 **Settings → Printer** (`/settings/printer`) sets up the printer for *this device* — each counter keeps its own setup in
