@@ -86,3 +86,23 @@ test('notifications: server feed, unread filter, open and mark all read', async 
   await page.getByText('Order Created').click();
   await expect(page).toHaveURL(/\/orders\/1094$/);
 });
+
+test('reports: date range presets, custom range and best sellers', async ({ page }) => {
+  await login(page);
+  await page.goto('/reports');
+  await expect(page.getByText('Order revenue')).toBeVisible();
+  await expect(page.getByText(/compared with/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Best sellers' })).toBeVisible();
+  await page.getByLabel('Period').selectOption('custom');
+  await expect(page.getByLabel('From')).toBeVisible();
+  await page.getByLabel('Period').selectOption('yesterday');
+  await expect(page.getByText(/\(1 day\)/)).toBeVisible();
+});
+
+test('reports: hybrid vendor gets sales and bookings & staff tabs', async ({ page }) => {
+  await login(page, { businessType: 'hybrid' });
+  await page.goto('/reports');
+  await expect(page.getByRole('tab', { name: 'Sales' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Bookings & staff' }).click();
+  await expect(page.getByRole('heading', { name: 'Staff performance' })).toBeVisible();
+});

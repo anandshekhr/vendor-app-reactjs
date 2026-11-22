@@ -2,6 +2,8 @@
 import { allowedBookingActions } from '@/features/bookings/transitions';
 import type {
   ApplicantApplication,
+  ReportHeadline,
+  ReportSummary,
   ServerNotification,
   CustomerDetail,
   CustomerRow,
@@ -446,6 +448,94 @@ export function createMockDb() {
         until: until ? until.toISOString() : null,
         phone: masked ? mask(o.customer_phone) : o.customer_phone,
         address: masked && o.customer_address ? { ...o.customer_address, phone_number: mask((o.customer_address as { phone_number?: string }).phone_number) } : o.customer_address,
+      };
+    },
+    /** Mirrors vendor_dashboard/api/reports.py (local days; delivered orders and completed bookings count). */
+    report(from: string, to: string): ReportSummary {
+      const day = (iso: string) => {
+        const d = new Date(iso);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      };
+      const days: string[] = [];
+      for (let d = new Date(`${from}T00:00:00`); day(d.toISOString()) <= to; d.setDate(d.getDate() + 1)) days.push(day(d.toISOString()));
+      const headline = (f: string, t: string): ReportHeadline => {
+        const os = orders.filter((o) => day(o.created_at) >= f && day(o.created_at) <= t);
+        const bs = bookings.filter((b) => day(b.start_time) >= f && day(b.start_time) <= t);
+        const delivered = os.filter((o) => o.status === 'delivered');
+        const sum = (xs: { total_amount: string | number }[]) => xs.reduce((n, x) => n + Number(x.total_amount), 0);
+        const orev = sum(delivered);
+        const brev = sum(bs.filter((b) => b.status === 'COMPLETED'));
+        const pos = os.filter((o) => o.source === 'pos');
+        return {
+          revenue: (orev + brev).toFixed(2),
+          orders: {
+            count: os.length, delivered: delivered.length, cancelled: os.filter((o) => o.status === 'cancelled' || o.status === 'rejected').length,
+            revenue: orev.toFixed(2), average_order_value: (delivered.length ? orev / delivered.length : 0).toFixed(2),
+            pos: { count: pos.length, revenue: sum(pos.filter((o) => o.status === 'delivered')).toFixed(2) },
+            online: { count: os.length - pos.length, revenue: sum(delivered.filter((o) => o.source !== 'pos')).toFixed(2) },
+          },
+          bookings: { count: bs.length, completed: bs.filter((b) => b.status === 'COMPLETED').length, cancelled: bs.filter((b) => b.status === 'CANCELLED').length, revenue: brev.toFixed(2) },
+        };
+      };
+      const n = days.length;
+      const prevTo = new Date(`${from}T00:00:00`);
+      prevTo.setDate(prevTo.getDate() - 1);
+      const prevFrom = new Date(prevTo);
+      prevFrom.setDate(prevFrom.getDate() - (n - 1));
+      const pf = day(prevFrom.toISOString());
+      const pt = day(prevTo.toISOString());
+      const inRange = orders.filter((o) => o.status === 'delivered' && day(o.created_at) >= from && day(o.created_at) <= to);
+      const products = new Map<string, { name: string; quantity: number; revenue: number; id: number | null }>();
+      for (const o of inRange) {
+        for (const i of o.items ?? []) {
+          const name = i.product_snapshot?.name ?? 'Item';
+          const row = products.get(name) ?? { name, quantity: 0, revenue: 0, id: i.product ?? null };
+          row.quantity += i.quantity;
+          row.revenue += Number(i.line_total ?? Number(i.unit_price) * i.quantity);
+          products.set(name, row);
+        }
+      }
+      const methods = new Map<string, { count: number; amount: number }>();
+      inRange.forEach((o) => {
+        const m = o.source === 'pos' ? 'cash' : 'cod';
+        const row = methods.get(m) ?? { count: 0, amount: 0 };
+        row.count += 1;
+        row.amount += Number(o.total_amount);
+        methods.set(m, row);
+      });
+      const completed = bookings.filter((b) => b.status === 'COMPLETED' && day(b.start_time) >= from && day(b.start_time) <= to);
+      const services = new Map<string, { bookings: number; revenue: number }>();
+      completed.forEach((b) => {
+        const row = services.get(b.service_name) ?? { bookings: 0, revenue: 0 };
+        row.bookings += 1;
+        row.revenue += Number(b.total_amount);
+        services.set(b.service_name, row);
+      });
+      const staff = new Map<string, { bookings: number; completed: number; revenue: number }>();
+      bookings.filter((b) => b.staff && day(b.start_time) >= from && day(b.start_time) <= to).forEach((b) => {
+        const row = staff.get(b.staff!) ?? { bookings: 0, completed: 0, revenue: 0 };
+        row.bookings += 1;
+        if (b.status === 'COMPLETED') {
+          row.completed += 1;
+          row.revenue += Number(b.total_amount);
+        }
+        staff.set(b.staff!, row);
+      });
+      return {
+        range: { from, to, days: n },
+        ...headline(from, to),
+        previous: { from: pf, to: pt, ...headline(pf, pt) },
+        payment_methods: [...methods].map(([method, v]) => ({ method, count: v.count, amount: v.amount.toFixed(2) })),
+        top_products: [...products.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 10).map((p) => ({ product_id: p.id, name: p.name, quantity: p.quantity, revenue: p.revenue.toFixed(2) })),
+        top_services: [...services].map(([name, v]) => ({ name, bookings: v.bookings, revenue: v.revenue.toFixed(2) })),
+        staff: [...staff].map(([name, v], i) => ({ provider_id: i + 1, name, bookings: v.bookings, completed: v.completed, revenue: v.revenue.toFixed(2) })),
+        daily: days.map((d) => {
+          const os = orders.filter((o) => day(o.created_at) === d);
+          const bs = bookings.filter((b) => day(b.start_time) === d);
+          const orev = os.filter((o) => o.status === 'delivered').reduce((t, o) => t + Number(o.total_amount), 0);
+          const brev = bs.filter((b) => b.status === 'COMPLETED').reduce((t, b) => t + Number(b.total_amount), 0);
+          return { date: d, orders: os.length, order_revenue: orev.toFixed(2), bookings: bs.length, booking_revenue: brev.toFixed(2), revenue: (orev + brev).toFixed(2) };
+        }),
       };
     },
     /** Mirrors vendor_dashboard/api/customers.py: one row per customer (by phone in the mock). */

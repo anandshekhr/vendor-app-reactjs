@@ -54,6 +54,12 @@ on('GET', '/vendor/dashboard/api/store/profile/', ({ db }) => {
   return [200, db.shop];
 });
 on('GET', '/vendor/dashboard/api/store/categories/', ({ db }) => [200, db.shopCategories()]);
+on('GET', '/vendor/dashboard/api/reports/summary/', ({ db, query }) => {
+  const to = query.get('to') ?? new Date().toISOString().slice(0, 10);
+  const from = query.get('from') ?? to;
+  if (from > to) return [400, { detail: '"from" must be on or before "to".' }];
+  return [200, db.report(from, to)];
+});
 on('GET', '/vendor/dashboard/api/notifications/', ({ db, query }) => {
   const all = db.serverNotifications;
   const rows = query.get('unread') ? all.filter((n) => !n.is_read) : all;

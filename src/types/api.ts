@@ -1094,3 +1094,29 @@ export interface ServerNotificationList {
   unread_by_type: Partial<Record<ServerNotificationType, number>>;
   results: ServerNotification[];
 }
+
+// ─── Reports (GET /vendor/dashboard/api/reports/summary/?from=&to=) ─────────
+
+export interface ReportHeadline {
+  revenue: Decimal;
+  orders: {
+    count: number;
+    delivered: number;
+    cancelled: number;
+    revenue: Decimal;
+    average_order_value: Decimal;
+    pos: { count: number; revenue: Decimal };
+    online: { count: number; revenue: Decimal };
+  };
+  bookings: { count: number; completed: number; cancelled: number; revenue: Decimal };
+}
+
+export interface ReportSummary extends ReportHeadline {
+  range: { from: string; to: string; days: number };
+  previous: ReportHeadline & { from: string; to: string };
+  payment_methods: { method: string; count: number; amount: Decimal }[];
+  top_products: { product_id: number | null; name: string; quantity: number; revenue: Decimal }[];
+  top_services: { name: string; bookings: number; revenue: Decimal }[];
+  staff: { provider_id: number; name: string; bookings: number; completed: number; revenue: Decimal }[];
+  daily: { date: string; orders: number; order_revenue: Decimal; bookings: number; booking_revenue: Decimal; revenue: Decimal }[];
+}
