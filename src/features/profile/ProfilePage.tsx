@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/useToast';
 import { useCapabilities } from '@/hooks/useCapabilities';
 import type { StoreHour } from '@/types/api';
 import { DAYS } from '@/features/employees/AvailabilityPage';
+import { CategoriesCard } from './CategoriesCard';
 import { useGetMeQuery, useGetShopProfileQuery, useGetStoreHoursQuery, useUpdateShopProfileMutation, useUpdateStoreHoursMutation } from './api';
 
 const money = z.string().trim().refine((v) => /^\d+(\.\d{1,2})?$/.test(v), 'Enter a valid amount');
@@ -184,6 +185,7 @@ export function ProfilePage() {
               </CardBody>
             </form>
           </Card>
+          <CategoriesCard />
           <Card>
             <CardHeader title="Opening hours" description="Monday to Sunday" />
             <CardBody>
@@ -199,7 +201,7 @@ export function ProfilePage() {
                 {shop.data.shop_image && <img src={shop.data.shop_image} alt="" className="h-12 w-12 rounded-full border border-line object-cover" />}
                 <div>
                   <p className="font-semibold">{m?.business_name ?? shop.data.name}</p>
-                  <p className="text-xs text-ink-subtle">{businessType === 'service' ? 'Service provider' : 'Product vendor'}</p>
+                  <p className="text-xs text-ink-subtle">{businessType === 'hybrid' ? 'Products and services' : businessType === 'service' ? 'Service provider' : 'Product vendor'}</p>
                 </div>
               </div>
               <div className="flex items-center justify-between rounded-md bg-ink/[0.03] p-3">

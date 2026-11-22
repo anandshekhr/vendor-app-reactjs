@@ -1,5 +1,5 @@
 import { api } from '@/services/api';
-import type { ShopDocumentRecord, ShopProfile, ShopQrResponse, StoreHour, VendorMe } from '@/types/api';
+import type { ShopCategories, ShopDocumentRecord, ShopProfile, ShopQrResponse, StoreHour, VendorMe } from '@/types/api';
 
 export const profileApi = api.injectEndpoints({
   endpoints: (build) => ({
@@ -14,6 +14,14 @@ export const profileApi = api.injectEndpoints({
     updateShopProfile: build.mutation<ShopProfile, Partial<ShopProfile> | FormData>({
       query: (data) => ({ url: '/vendor/dashboard/api/store/profile/', method: 'PATCH', data }),
       invalidatesTags: ['Shop', 'Me'],
+    }),
+    getShopCategories: build.query<ShopCategories, void>({
+      query: () => '/vendor/dashboard/api/store/categories/',
+      providesTags: ['ShopCategories'],
+    }),
+    updateShopCategories: build.mutation<ShopCategories, number[]>({
+      query: (ids) => ({ url: '/vendor/dashboard/api/store/categories/', method: 'PUT', data: { category_ids: ids } }),
+      invalidatesTags: ['ShopCategories', 'Shop', 'Me'],
     }),
     getStoreHours: build.query<StoreHour[], void>({
       query: () => '/vendor/dashboard/api/store/hours/',
@@ -52,6 +60,8 @@ export const {
   useGetMeQuery,
   useGetShopProfileQuery,
   useUpdateShopProfileMutation,
+  useGetShopCategoriesQuery,
+  useUpdateShopCategoriesMutation,
   useGetStoreHoursQuery,
   useUpdateStoreHoursMutation,
   useGetStoreDocumentsQuery,

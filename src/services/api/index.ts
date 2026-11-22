@@ -8,6 +8,7 @@ export const TAGS = [
   'PrintRateCards',
   'Me',
   'Shop',
+  'ShopCategories',
   'StoreHours',
   'Documents',
   'Dashboard',

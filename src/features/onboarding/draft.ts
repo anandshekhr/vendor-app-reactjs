@@ -13,7 +13,10 @@ export interface OnboardingDraft {
   vendorName: string;
   email: string;
   businessName: string;
-  businessType: 'product' | 'service';
+  /** hybrid = sells products and provides services (categories of both kinds). */
+  businessType: 'product' | 'service' | 'hybrid';
+  /** Type of each chosen category, so a hybrid application can be checked for both kinds. */
+  categoryTypes?: Record<number, 'product' | 'service'>;
   categoryIds: number[];
   address: string;
   city: string;
@@ -50,6 +53,10 @@ export function validateStep(step: StepId, d: OnboardingDraft): Record<string, s
   }
   if (step === 'categories' || all) {
     if (d.categoryIds.length === 0) e.categoryIds = 'Select at least one category.';
+    else if (d.businessType === 'hybrid' && d.categoryTypes) {
+      const kinds = new Set(d.categoryIds.map((id) => d.categoryTypes![id]));
+      if (!kinds.has('product') || !kinds.has('service')) e.categoryIds = 'Choose at least one product category and one service category.';
+    }
   }
   if (step === 'address' || all) {
     if (d.address.trim().length < 5) e.address = 'Enter the full shop address.';
@@ -57,7 +64,7 @@ export function validateStep(step: StepId, d: OnboardingDraft): Record<string, s
     if (!d.state.trim()) e.state = 'Required.';
     if (!/^\d{6}$/.test(d.zipCode)) e.zipCode = 'Enter a 6-digit PIN code.';
   }
-  if ((step === 'service' || all) && d.businessType === 'service') {
+  if ((step === 'service' || all) && d.businessType !== 'product') {
     const open = d.shopHours.filter((h) => h.open);
     if (open.length === 0) e.shopHours = 'Select at least one day your shop is open.';
     else if (open.some((h) => !h.start_time || !h.end_time || h.start_time >= h.end_time)) e.shopHours = 'Closing time must be after opening time.';
@@ -107,7 +114,7 @@ export function buildApplicationFormData(d: OnboardingDraft): FormData {
     fd.append('ifsc_code', d.ifsc.trim().toUpperCase());
   }
   if (d.upiId.trim()) fd.append('upi_id', d.upiId.trim());
-  if (d.businessType === 'service') {
+  if (d.businessType !== 'product') {
     fd.append(
       'shop_hours_payload',
       JSON.stringify(d.shopHours.filter((h) => h.open).map(({ day_of_week, start_time, end_time }) => ({ day_of_week, start_time, end_time }))),

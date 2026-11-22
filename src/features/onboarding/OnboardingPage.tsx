@@ -79,20 +79,27 @@ export function OnboardingPage() {
       { id: 'business', label: 'Business' },
       { id: 'categories', label: 'Categories' },
       { id: 'address', label: 'Location' },
-      ...(draft.businessType === 'service' ? [{ id: 'service' as StepId, label: 'Hours & staff' }] : []),
+      ...(draft.businessType !== 'product' ? [{ id: 'service' as StepId, label: 'Hours & staff' }] : []),
       { id: 'documents', label: 'Tax & documents' },
       { id: 'review', label: 'Review' },
     ],
     [draft.businessType],
   );
-  const progress = draft.businessType === 'product' ? [...steps, { id: 'products' as const, label: 'Starter products' }] : steps;
+  const progress = draft.businessType !== 'service' ? [...steps, { id: 'products' as const, label: 'Starter products' }] : steps;
   const progressIndex = stage === 'form' ? stepIndex : progress.length - 1;
   const step = steps[Math.min(stepIndex, steps.length - 1)];
   const set = <K extends keyof OnboardingDraft>(key: K, value: OnboardingDraft[K]) => setDraft((d) => ({ ...d, [key]: value }));
-  const flatCategories = useMemo(() => flatten(categories.data ?? []).filter((c) => c.category_type === draft.businessType), [categories.data, draft.businessType]);
+  const flatCategories = useMemo(
+    () => flatten(categories.data ?? []).filter((c) => draft.businessType === 'hybrid' || c.category_type === draft.businessType),
+    [categories.data, draft.businessType],
+  );
+  const categoryTypes = useMemo(
+    () => Object.fromEntries(flatten(categories.data ?? []).map((c) => [c.id, c.category_type])) as Record<number, 'product' | 'service'>,
+    [categories.data],
+  );
 
   const next = () => {
-    const errs = validateStep(step.id, draft);
+    const errs = validateStep(step.id, { ...draft, categoryTypes });
     setErrors(errs);
     if (Object.keys(errs).length === 0) setStepIndex((i) => Math.min(i + 1, steps.length - 1));
   };
@@ -137,7 +144,7 @@ export function OnboardingPage() {
   };
 
   const onSubmit = async () => {
-    const errs = validateStep('review', draft);
+    const errs = validateStep('review', { ...draft, categoryTypes });
     setErrors(errs);
     if (Object.keys(errs).length) return;
     try {
@@ -165,7 +172,7 @@ export function OnboardingPage() {
   };
 
   if (submitted && stage === 'done') {
-    const needsProducts = draft.businessType === 'product';
+    const needsProducts = draft.businessType !== 'service';
     return (
       <div className="flex min-h-full items-center justify-center p-4">
         <Card className="w-full max-w-lg">
@@ -302,11 +309,12 @@ export function OnboardingPage() {
                 </Field>
                 <fieldset className="sm:col-span-2">
                   <legend className="mb-2 text-sm font-medium">Business type</legend>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-3">
                     {(
                       [
                         { v: 'product', t: 'I sell products', d: 'Grocery, dairy, bakery, pharmacy, retail…' },
                         { v: 'service', t: 'I provide services', d: 'Electrician, plumber, salon, cleaning, repairs…' },
+                        { v: 'hybrid', t: 'Both products and services', d: 'e.g. a mobile shop that also repairs phones, a salon that sells products' },
                       ] as const
                     ).map((o) => (
                       <label key={o.v} className={cn('cursor-pointer rounded-md border p-3', draft.businessType === o.v ? 'border-brand-600 bg-brand-50/50 dark:bg-brand-900/10' : 'border-line')}>
@@ -329,7 +337,12 @@ export function OnboardingPage() {
 
             {step.id === 'categories' && (
               <>
-                <p className="text-sm text-ink-muted">Choose the categories that describe your {draft.businessType === 'service' ? 'services' : 'products'}.</p>
+                <p className="text-sm text-ink-muted">
+                  {draft.businessType === 'hybrid'
+                    ? 'Choose at least one product category and one service category.'
+                    : `Choose the categories that describe your ${draft.businessType === 'service' ? 'services' : 'products'}.`}{' '}
+                  You can be in several categories.
+                </p>
                 {errors.categoryIds && <p className="text-sm text-red-600" role="alert">{errors.categoryIds}</p>}
                 {categories.isLoading ? (
                   <Spinner />
@@ -344,6 +357,7 @@ export function OnboardingPage() {
                           onChange={(e) => set('categoryIds', e.target.checked ? [...draft.categoryIds, c.id] : draft.categoryIds.filter((x) => x !== c.id))}
                         />
                         {c.name}
+                        {draft.businessType === 'hybrid' && <span className="text-xs text-ink-subtle">({c.category_type === 'service' ? 'service' : 'product'})</span>}
                       </label>
                     ))}
                     {flatCategories.length === 0 && <p className="text-sm text-ink-muted">No categories available for this business type.</p>}
@@ -478,13 +492,13 @@ export function OnboardingPage() {
                     ['Name', draft.vendorName],
                     ['Email', draft.email],
                     ['Business', draft.businessName],
-                    ['Type', draft.businessType === 'service' ? 'Service provider' : 'Product vendor'],
+                    ['Type', draft.businessType === 'hybrid' ? 'Products and services' : draft.businessType === 'service' ? 'Service provider' : 'Product vendor'],
                     ['Categories', flatCategories.filter((c) => draft.categoryIds.includes(c.id)).map((c) => c.name).join(', ')],
                     ['Address', `${draft.address}, ${draft.city}, ${draft.state} ${draft.zipCode}`],
                     ['GSTIN', draft.gstTaxId || '—'],
                     ['Documents', `${Object.values(draft.files).flat().length} file(s)`],
                     ['Payout account', draft.accountNumber ? `•••• ${draft.accountNumber.replace(/\s/g, '').slice(-4)} · ${draft.ifsc}` : 'Add later'],
-                    ...(draft.businessType === 'service' ? [['Employees', String(draft.employees.length)]] : []),
+                    ...(draft.businessType !== 'product' ? [['Employees', String(draft.employees.length)]] : []),
                   ].map(([k, v]) => (
                     <div key={k}>
                       <dt className="text-ink-subtle">{k}</dt>
@@ -496,7 +510,7 @@ export function OnboardingPage() {
                   <Checkbox checked={draft.acceptTerms} onChange={(e) => set('acceptTerms', e.target.checked)} className="mt-0.5" />
                   I confirm the information is correct and agree to TheNearByShop's vendor terms.
                 </label>
-                {draft.businessType === 'product' && (
+                {draft.businessType !== 'service' && (
                   <p className="rounded-md bg-brand-50/60 p-2 text-ink-muted dark:bg-brand-900/10">
                     Next, you will pick at least 5 products from our catalogue to start selling.
                   </p>

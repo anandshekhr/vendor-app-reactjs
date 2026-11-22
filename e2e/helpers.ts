@@ -1,8 +1,8 @@
 import { expect, type Page } from '@playwright/test';
 
-export async function login(page: Page, opts: { businessType?: 'product' | 'service' } = {}) {
+export async function login(page: Page, opts: { businessType?: 'product' | 'service' | 'hybrid' } = {}) {
   await page.addInitScript((type) => {
-    if (type === 'service') localStorage.setItem('tnbs.mock.type', 'service');
+    if (type !== 'product') localStorage.setItem('tnbs.mock.type', type);
   }, opts.businessType ?? 'product');
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));

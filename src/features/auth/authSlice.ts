@@ -44,6 +44,12 @@ const authSlice = createSlice({
       state.status = 'authenticated';
       saveBusinessSnapshot(action.payload);
     },
+    /** The shop's categories changed what it offers (product / service / hybrid): the menu follows at once. */
+    businessTypeChanged(state, action: PayloadAction<BusinessSnapshot['businessType']>) {
+      if (!state.business) return;
+      state.business = { ...state.business, businessType: action.payload };
+      saveBusinessSnapshot(state.business);
+    },
     /** Network unavailable but a cached business snapshot exists: allow offline use (POS). */
     offlineSessionResumed(state) {
       if (state.business) state.status = 'authenticated';
@@ -61,5 +67,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { signedIn, businessLoaded, offlineSessionResumed, signedOut } = authSlice.actions;
+export const { signedIn, businessLoaded, businessTypeChanged, offlineSessionResumed, signedOut } = authSlice.actions;
 export default authSlice.reducer;

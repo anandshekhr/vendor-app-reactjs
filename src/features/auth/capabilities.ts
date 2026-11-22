@@ -28,11 +28,12 @@ const PRODUCT: Capability[] = ['products', 'inventory', 'scanner', 'pos', 'order
 const SERVICE: Capability[] = ['services', 'bookings', 'employees', 'availability'];
 
 /**
- * The backend models business type as a single `Shop.is_service_provider` boolean (API_MAPPING §2, gap G-2),
- * so `hybrid` is supported by the capability model but is never inferred from the current API.
+ * The shop's `business_type` (product / service / hybrid) follows its categories on the server. Older servers only
+ * send `is_service_provider`, which can't express hybrid.
  */
-export function businessTypeFromShop(shop: Pick<ShopProfile, 'is_service_provider'> | null | undefined): BusinessType | null {
+export function businessTypeFromShop(shop: Pick<ShopProfile, 'is_service_provider' | 'business_type'> | null | undefined): BusinessType | null {
   if (!shop) return null;
+  if (shop.business_type) return shop.business_type;
   return shop.is_service_provider ? 'service' : 'product';
 }
 

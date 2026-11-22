@@ -3,7 +3,7 @@
  * It mirrors response shapes (including DRF pagination) so the UI can be exercised without a backend. It is never
  * bundled into the request path unless explicitly enabled.
  *
- * Switch business type with: localStorage.setItem('tnbs.mock.type', 'service'); then reload.
+ * Switch business type with: localStorage.setItem('tnbs.mock.type', 'service' | 'hybrid'); then reload.
  */
 import { AxiosError, AxiosHeaders, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 import { installMockAdapter } from '../client';
@@ -49,7 +49,12 @@ on('POST', '/api/v2/notifications/device/deactivate/', () => [200, { success: tr
 
 // ─── Vendor ───
 on('GET', '/api/v2/vendors/me/', ({ db }) => [200, db.me]);
-on('GET', '/vendor/dashboard/api/store/profile/', ({ db }) => [200, db.shop]);
+on('GET', '/vendor/dashboard/api/store/profile/', ({ db }) => {
+  db.shopCategories(); // keeps business_type/categories on the profile in step
+  return [200, db.shop];
+});
+on('GET', '/vendor/dashboard/api/store/categories/', ({ db }) => [200, db.shopCategories()]);
+on('PUT', '/vendor/dashboard/api/store/categories/', ({ db, body }) => db.setShopCategories(body?.category_ids));
 on('PATCH', '/vendor/dashboard/api/store/profile/', ({ db, body }) => {
   if (!(body instanceof FormData)) Object.assign(db.shop, body);
   return [200, db.shop];

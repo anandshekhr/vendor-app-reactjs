@@ -2,6 +2,8 @@
 import { allowedBookingActions } from '@/features/bookings/transitions';
 import type {
   ApplicantApplication,
+  ShopCategories,
+  ShopCategoryOption,
   StockMovement,
   StarterProductSelection,
   BankAccount,
@@ -55,13 +57,24 @@ function finalPrice(p: Product): number {
 }
 
 export function createMockDb() {
-  const isService = (() => {
+  /** 'product' (default), 'service' or 'hybrid' -- set localStorage 'tnbs.mock.type' and reload. */
+  const mockType = (() => {
     try {
-      return localStorage.getItem('tnbs.mock.type') === 'service';
+      const t = localStorage.getItem('tnbs.mock.type');
+      return t === 'service' || t === 'hybrid' ? t : 'product';
     } catch {
-      return false;
+      return 'product';
     }
-  })();
+  })() as 'product' | 'service' | 'hybrid';
+  const isService = mockType === 'service';
+  const shopCategoryOptions: ShopCategoryOption[] = [
+    { id: 10, name: 'Grocery', category_type: 'product', parent: null, subscription: { cost: '10.00', frequency: 'daily', grace_days: 3, description: '' } },
+    { id: 11, name: 'Dairy', category_type: 'product', parent: 'Grocery', subscription: null },
+    { id: 12, name: 'Bakery', category_type: 'product', parent: null, subscription: { cost: '150.00', frequency: 'monthly', grace_days: 3, description: '' } },
+    { id: 20, name: 'Salon', category_type: 'service', parent: null, subscription: { cost: '70.00', frequency: 'weekly', grace_days: 3, description: '' } },
+    { id: 21, name: 'Home repair', category_type: 'service', parent: null, subscription: null },
+  ];
+  let shopCategoryIds = mockType === 'service' ? [20] : mockType === 'hybrid' ? [10, 20] : [10, 11];
   const now = Date.now();
   const iso = (offsetMin: number) => new Date(now - offsetMin * 60_000).toISOString();
 
@@ -313,7 +326,8 @@ export function createMockDb() {
     minimum_order: '99.00',
     free_delivery_threshold: '499.00',
     is_accepting_orders: true,
-    is_service_provider: isService,
+    is_service_provider: mockType !== 'product',
+    business_type: mockType,
   };
   const me: VendorMe = {
     id: 1,
@@ -373,6 +387,26 @@ export function createMockDb() {
       { id: 21, name: 'Home repair', parent_category: null, category_type: 'service', children: [] },
     ] as OnboardingCategory[],
     applications: [] as ApplicantApplication[],
+
+    /** Mirrors vendor_dashboard/api/categories.py. */
+    shopCategories(): ShopCategories {
+      const selected = shopCategoryOptions.filter((c) => shopCategoryIds.includes(c.id));
+      const kinds = new Set(selected.map((c) => c.category_type));
+      const type = kinds.has('product') && kinds.has('service') ? 'hybrid' : kinds.has('service') ? 'service' : 'product';
+      shop.business_type = type;
+      shop.is_service_provider = type !== 'product';
+      shop.categories = selected.map(({ id, name, category_type }) => ({ id, name, category_type }));
+      const perDay = { daily: 1, weekly: 1 / 7, monthly: 1 / 30 } as const;
+      const estimate = selected.reduce((s, c) => (c.subscription ? s + Number(c.subscription.cost) * perDay[c.subscription.frequency] * 30 : s), 0);
+      return { business_type: type, selected, available: shopCategoryOptions, subscription_monthly_estimate: estimate.toFixed(2), max_categories: 20 };
+    },
+    setShopCategories(ids: number[]): [number, unknown] {
+      if (!Array.isArray(ids) || ids.length === 0) return [400, { category_ids: ['This list may not be empty.'] }];
+      if (ids.some((id) => !shopCategoryOptions.some((c) => c.id === id))) return [400, { category_ids: ['Some categories do not exist or are not open to vendors.'] }];
+      const before = shopCategoryIds;
+      shopCategoryIds = [...new Set(ids)];
+      return [200, { ...db.shopCategories(), added: shopCategoryIds.filter((i) => !before.includes(i)), removed: before.filter((i) => !shopCategoryIds.includes(i)) }];
+    },
 
     /** Mirrors StarterProductService in api-services: ≥ 5 distinct catalogue products, price ≤ MRP. */
     starterSelections(items: { master_product_id: number; price?: string; stock?: number }[]): { error: [number, unknown] } | { selections: StarterProductSelection[] } {

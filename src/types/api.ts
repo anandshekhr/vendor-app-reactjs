@@ -98,6 +98,35 @@ export interface ShopProfile {
   free_delivery_threshold: Decimal;
   is_accepting_orders: boolean;
   is_service_provider: boolean;
+  /** product / service / hybrid (both). Follows the shop's categories. Missing on older servers. */
+  business_type?: 'product' | 'service' | 'hybrid';
+  categories?: { id: number; name: string; category_type: 'product' | 'service' }[];
+}
+
+export interface CategorySubscription {
+  cost: Decimal;
+  frequency: 'daily' | 'weekly' | 'monthly';
+  grace_days: number;
+  description: string;
+}
+
+export interface ShopCategoryOption {
+  id: number;
+  name: string;
+  category_type: 'product' | 'service';
+  parent: string | null;
+  subscription: CategorySubscription | null;
+}
+
+/** GET/PUT /vendor/dashboard/api/store/categories/ */
+export interface ShopCategories {
+  business_type: 'product' | 'service' | 'hybrid';
+  selected: ShopCategoryOption[];
+  available: ShopCategoryOption[];
+  subscription_monthly_estimate: Decimal;
+  max_categories: number;
+  added?: number[];
+  removed?: number[];
 }
 
 export interface StoreHour {
