@@ -306,3 +306,61 @@ test('customer contact is hidden some time after an order is delivered', async (
   await expect(page.getByText('9876543210')).toHaveCount(0);
   await expect(page.getByText(/hidden for the customer’s privacy/)).toBeVisible();
 });
+
+test('printing: preview a customer PDF page by page inside the portal', async ({ page }) => {
+  const errors = await login(page);
+  await page.goto('/printing');
+  await page.getByText('PRT-RIDER-ASSIGNED').click();
+  await page.getByRole('button', { name: 'Preview Assignment_Chapter3.pdf' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('Page 1 of 2')).toBeVisible();
+  await expect(dialog.getByText('Customer asked for pages 1-5,8.')).toBeVisible();
+  await expect(dialog.getByText('To print')).toBeVisible();
+  const canvas = dialog.getByLabel('Page 1 of Assignment_Chapter3.pdf');
+  await expect(canvas).toBeVisible();
+  // Something was drawn: the page has dark (text) pixels, not just white.
+  await expect
+    .poll(() =>
+      canvas.evaluate((c) => {
+        const el = c as unknown as { width: number; height: number; getContext(t: '2d'): { getImageData(...a: number[]): { data: Uint8ClampedArray } } };
+        const d = el.getContext('2d').getImageData(0, 0, el.width, el.height).data;
+        for (let i = 0; i < d.length; i += 4) if (d[i] < 128) return true;
+        return false;
+      }),
+    )
+    .toBe(true);
+  await dialog.getByRole('button', { name: 'Next page' }).click();
+  await expect(dialog.getByText('Page 2 of 2')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Next page' })).toBeDisabled();
+  expect(errors).toEqual([]);
+});
+
+test('printing: a paired printer prints accepted orders automatically', async ({ page }) => {
+  const errors = await login(page);
+  await page.goto('/printing/settings');
+  const printers = page.getByRole('main');
+  await expect(printers.getByText('Counter printer', { exact: true })).toBeVisible();
+  await expect(printers.getByText('Online', { exact: true })).toBeVisible();
+  await page.getByRole('checkbox', { name: 'Print accepted orders automatically on Counter printer' }).check();
+  await expect(page.getByText('Counter printer prints accepted orders automatically')).toBeVisible();
+
+  // Pairing a new printer shows a code for the agent.
+  await page.getByRole('button', { name: 'Add printer' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Name').fill('Colour printer');
+  await dialog.getByRole('checkbox', { name: 'Prints in colour' }).check();
+  await dialog.getByRole('button', { name: 'Save printer' }).click();
+  await expect(printers.getByText('Not paired')).toBeVisible();
+  await page.getByRole('button', { name: 'Pair agent' }).click();
+  await expect(page.getByLabel('Pairing code')).toHaveText('K7QM-3XPA');
+  await page.keyboard.press('Escape');
+
+  // Accepting an order sends it to the counter printer (navigate in the app: the mock API lives in the page).
+  await openNav(page);
+  await page.getByRole('navigation', { name: 'Main navigation' }).last().getByRole('link', { name: /Printing orders/ }).click();
+  await page.getByText('PRT-NEW-PICKUP').click();
+  await page.getByRole('button', { name: 'Accept', exact: true }).click();
+  await expect(page.getByText('Waiting for Counter printer')).toBeVisible();
+  await expect(page.getByText(/Sent to Counter printer automatically/).first()).toBeVisible();
+  expect(errors).toEqual([]);
+});

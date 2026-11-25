@@ -396,6 +396,12 @@ on('PUT', '/api/vendor-onboarding/applications/:id/products/', ({ db, params, bo
 
 // ─── Printing orders ───
 const PS = '/api/v1/print-shop/vendor';
+on('GET', `${PS}/stations/`, ({ db }) => db.printing.stations());
+on('POST', `${PS}/stations/`, ({ db, body }) => db.printing.saveStation(body ?? {}));
+on('PATCH', `${PS}/stations/:id/`, ({ db, body, params }) => db.printing.saveStation(body ?? {}, Number(params.id)));
+on('DELETE', `${PS}/stations/:id/`, ({ db, params }) => db.printing.deleteStation(Number(params.id)));
+on('POST', `${PS}/stations/:id/pairing-code/`, ({ db, params }) => db.printing.pairingCode(Number(params.id)));
+on('POST', `${PS}/stations/:id/unpair/`, ({ db, params }) => db.printing.unpair(Number(params.id)));
 on('GET', `${PS}/settings/`, ({ db }) => db.printing.settings());
 on('PATCH', `${PS}/settings/`, ({ db, body }) => db.printing.updateSettings(body));
 on('GET', `${PS}/rate-cards/`, ({ db }) => db.printing.rateCards());

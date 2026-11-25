@@ -89,6 +89,18 @@ export const HELP_TOPICS: HelpTopic[] = [
         links: [{ label: 'Subscription & billing', to: '/billing' }],
       },
       {
+        id: 'start-printing',
+        q: 'How do I start taking printing and photocopy orders?',
+        a: [
+          'Go to Business profile → Categories → Change categories, tick “Printing & Photocopy” and save. Printing orders appears in your menu straight away.',
+          'Then open Printing orders → Prices & settings and add your per-page prices (black & white or colour, paper size, single- or double-sided, binding) — at least black & white A4. Customers nearby can then upload documents to print; when an order doesn’t match any of your prices, you send them a quote instead.',
+        ],
+        links: [
+          { label: 'Change categories', to: '/profile' },
+          { label: 'Prices & settings', to: '/printing/settings' },
+        ],
+      },
+      {
         id: 'cannot-remove-category',
         q: 'Why can’t I remove a category?',
         a: [
@@ -257,12 +269,22 @@ export const HELP_TOPICS: HelpTopic[] = [
         id: 'print-orders',
         q: 'How do printing orders work?',
         a: [
-          'Customers upload documents and choose copies, colour and paper. You see them under Printing orders, send a quote when needed, print, and hand over by pickup code or to a delivery partner. Prices come from your rate cards in Printing settings.',
+          'Customers upload documents and choose copies, colour and paper. You see them under Printing orders, send a quote when needed, print, and hand over by pickup code or to a delivery partner. Prices come from your per-page prices under Printing orders → Prices & settings.',
         ],
         links: [
           { label: 'Printing orders', to: '/printing' },
-          { label: 'Printing settings', to: '/printing/settings' },
+          { label: 'Prices & settings', to: '/printing/settings' },
         ],
+      },
+      {
+        id: 'auto-print-orders',
+        q: 'Can printing orders print by themselves when I accept them?',
+        a: [
+          'Yes, with the TNBS Print Agent on a Windows PC connected to your printer. Go to Printing orders → Prices & settings → Printers, add your printer, press Pair agent and type the code into the agent. Then tick “Print accepted orders automatically”. Ask the TheNearByShop team for the agent installer.',
+          'From then on, each delivery or pickup order prints as soon as it’s accepted (by you, or automatically if auto-accept is on). PDF and image files print; Word and other files, or colour/double-sided pages your printer can’t do, you print by hand. Check the prints, then mark the order ready as usual.',
+          'If the printer jams or runs out of paper, you get a notification and the order waits: fix the printer and press Send again on the print job. Nothing is printed twice: if you print a document by hand and mark it printed first, the printer skips it.',
+        ],
+        links: [{ label: 'Prices & settings', to: '/printing/settings' }],
       },
     ],
   },

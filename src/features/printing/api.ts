@@ -9,6 +9,8 @@ import type {
   PrintOrderSummary,
   PrintRateCard,
   PrintShopSettings,
+  PrintStation,
+  PrintStationInput,
 } from '@/types/api';
 
 const BASE = '/api/v1/print-shop/vendor';
@@ -35,6 +37,36 @@ const action = (path: string) => ({
 
 export const printingApi = api.injectEndpoints({
   endpoints: (build) => ({
+    listPrintStations: build.query<PrintStation[], void>({
+      query: () => ({ url: `${BASE}/stations/` }),
+      providesTags: ['PrintStations'],
+    }),
+    savePrintStation: build.mutation<PrintStation, Partial<PrintStationInput> & { id?: number }>({
+      query: ({ id, ...data }) => (id ? { url: `${BASE}/stations/${id}/`, method: 'PATCH', data } : { url: `${BASE}/stations/`, method: 'POST', data }),
+      // Switches (e.g. auto-print) flip at once and roll back if the save fails.
+      async onQueryStarted({ id, ...patch }, { dispatch, queryFulfilled }) {
+        if (!id) return;
+        const undo = dispatch(
+          printingApi.util.updateQueryData('listPrintStations', undefined, (draft) => {
+            const st = draft.find((x) => x.id === id);
+            if (st) Object.assign(st, patch);
+          }),
+        );
+        queryFulfilled.catch(undo.undo);
+      },
+      invalidatesTags: ['PrintStations'],
+    }),
+    deletePrintStation: build.mutation<void, number>({
+      query: (id) => ({ url: `${BASE}/stations/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['PrintStations'],
+    }),
+    stationPairingCode: build.mutation<{ pairing_code: string; expires_at: string }, number>({
+      query: (id) => ({ url: `${BASE}/stations/${id}/pairing-code/`, method: 'POST' }),
+    }),
+    unpairPrintStation: build.mutation<PrintStation, number>({
+      query: (id) => ({ url: `${BASE}/stations/${id}/unpair/`, method: 'POST' }),
+      invalidatesTags: ['PrintStations'],
+    }),
     getPrintSettings: build.query<PrintShopSettings, void>({
       query: () => ({ url: `${BASE}/settings/` }),
       providesTags: ['PrintSettings'],
@@ -99,6 +131,11 @@ export const printingApi = api.injectEndpoints({
 });
 
 export const {
+  useListPrintStationsQuery,
+  useSavePrintStationMutation,
+  useDeletePrintStationMutation,
+  useStationPairingCodeMutation,
+  useUnpairPrintStationMutation,
   useGetPrintSettingsQuery,
   useUpdatePrintSettingsMutation,
   useListRateCardsQuery,

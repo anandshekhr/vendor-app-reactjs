@@ -1,5 +1,5 @@
 import type { BadgeTone } from '@/components/ui';
-import type { PrintDeliveryState, PrintFulfilmentType, PrintOrderFile, PrintOrderStatus } from '@/types/api';
+import type { PrintDeliveryState, PrintFulfilmentType, PrintJob, PrintOrderFile, PrintOrderStatus, PrintStation } from '@/types/api';
 
 /** The steps each fulfilment type goes through after the order is confirmed (mirrors the API's status machine). */
 export const FULFILMENT_STEPS: Record<PrintFulfilmentType, { status: PrintOrderStatus; label: string }[]> = {
@@ -100,4 +100,38 @@ export function printOptionsSummary(f: Pick<PrintOrderFile, 'color_mode' | 'pape
   ]
     .filter(Boolean)
     .join(' · ');
+}
+
+/**
+ * Pages a '1-5,8,11-13' range selects, as the server prices them (apps.print_shop pricing_service.parse_page_range):
+ * blank or unreadable means every page, and a range that selects nothing also means every page.
+ */
+export function selectedPages(pageRange: string, totalPages: number): Set<number> {
+  const all = new Set(Array.from({ length: totalPages }, (_, i) => i + 1));
+  if (!pageRange.trim() || totalPages <= 0) return all;
+  const picked = new Set<number>();
+  for (const raw of pageRange.split(',')) {
+    const chunk = raw.trim();
+    if (!chunk) continue;
+    const [a, b] = chunk.includes('-') ? chunk.split('-', 2) : [chunk, chunk];
+    const start = Number(a);
+    const end = Number(b);
+    if (!Number.isInteger(start) || !Number.isInteger(end)) return all;
+    for (let p = Math.max(start, 1); p <= Math.min(end, totalPages); p++) picked.add(p);
+  }
+  return picked.size ? picked : all;
+}
+
+/** Where an agent-printed job is: waiting for the printer, printing, or done there. */
+export function jobStationText(job: Pick<PrintJob, 'station_name' | 'status'>): string {
+  const at = job.station_name ?? 'the printer';
+  if (job.status === 'QUEUED') return `Waiting for ${at}`;
+  if (job.status === 'PRINTING') return `Printing on ${at}`;
+  if (job.status === 'PRINTED') return `Printed on ${at}`;
+  return `Failed on ${at}`;
+}
+
+/** What a print station can print, in a few words. */
+export function stationSummary(st: Pick<PrintStation, 'supports_color' | 'supports_duplex' | 'paper_sizes'>): string {
+  return [st.supports_color ? 'Colour' : 'Black & white only', st.supports_duplex ? 'double-sided' : 'single-sided', st.paper_sizes.join(', ')].join(' · ');
 }

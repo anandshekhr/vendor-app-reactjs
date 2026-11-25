@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/useToast';
 import { cn } from '@/utils/cn';
 import { formatCurrency, formatDateTime } from '@/utils/format';
 import type { PrintJob, PrintOrderDetail, PrintOrderFile, PrintOrderStatus } from '@/types/api';
+import { DocumentPreview } from './DocumentPreview';
 import {
   useAcceptPrintOrderMutation,
   useCancelPrintOrderMutation,
@@ -25,7 +26,7 @@ import {
 import { FulfilmentBadge, PrintStatusBadge } from './PrintBadges';
 import { CustomerContact } from '@/components/feedback/CustomerContact';
 import { PickupVerifyPanel } from './PickupVerifyPanel';
-import { DELIVERY_STATE_TEXT, FULFILMENT_STEPS, formatBytes, printOptionsSummary, stepIndex } from './printOrderView';
+import { DELIVERY_STATE_TEXT, FULFILMENT_STEPS, formatBytes, jobStationText, printOptionsSummary, stepIndex } from './printOrderView';
 
 type ReasonKind = 'reject' | 'cancel' | 'clarify' | null;
 
@@ -354,11 +355,8 @@ function DocumentsCard({ order }: { order: PrintOrderDetail }) {
           </li>
         ))}
       </ul>
-      <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} title={preview?.file.original_filename ?? ''} size="xl">
-        {preview && (
-          // sandbox: no scripts or navigation from the customer's file; the server also sends a sandbox CSP.
-          <iframe title={`Preview of ${preview.file.original_filename}`} src={preview.url} sandbox="" className="h-[70vh] w-full rounded-md border border-line bg-white" />
-        )}
+      <Dialog open={Boolean(preview)} onClose={() => setPreview(null)} title={preview?.file.original_filename ?? ''} description={preview ? printOptionsSummary(preview.file) : undefined} size="xl">
+        {preview && <DocumentPreview file={preview.file} url={preview.url} onDownload={() => open(preview.file, 'attachment')} />}
       </Dialog>
     </Card>
   );
@@ -383,11 +381,21 @@ function PrintJobsCard({ order }: { order: PrintOrderDetail }) {
 
   return (
     <Card>
-      <CardHeader title="Print jobs" description="One per document. Mark each one printed as you go." />
+      <CardHeader
+        title="Print jobs"
+        description={
+          order.print_jobs.some((j) => j.station_name)
+            ? 'Sent to your printer automatically. Check the prints, then mark the order ready. Print anything else by hand.'
+            : 'One per document. Mark each one printed as you go.'
+        }
+      />
       <ul className="divide-y divide-line">
         {order.print_jobs.map((job) => (
           <li key={job.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5 text-sm">
-            <span className="min-w-0 flex-1 truncate">{job.file_name}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{job.file_name}</span>
+              {job.station_name && <span className="block text-xs text-ink-muted">{jobStationText(job)}</span>}
+            </span>
             <Badge tone={job.status === 'PRINTED' ? 'success' : job.status === 'FAILED' ? 'danger' : 'neutral'}>
               {job.status.toLowerCase()}
               {job.retry_count > 0 && ` · reprint ${job.retry_count}`}
@@ -404,9 +412,9 @@ function PrintJobsCard({ order }: { order: PrintOrderDetail }) {
                 )}
               </>
             )}
-            {job.status === 'PRINTED' && ['PRINTING', 'QUALITY_CHECK'].includes(order.status) && (
+            {(job.status === 'PRINTED' || (job.status === 'FAILED' && job.station_name)) && ['PRINTING', 'QUALITY_CHECK'].includes(order.status) && (
               <Button size="sm" variant="ghost" leftIcon={<RotateCcw className="h-3.5 w-3.5" />} onClick={() => setReprintJob(job)}>
-                Reprint
+                {job.status === 'FAILED' ? 'Send again' : 'Reprint'}
               </Button>
             )}
             {job.last_error && job.status === 'FAILED' && <p className="w-full text-xs text-red-600">{job.last_error}</p>}

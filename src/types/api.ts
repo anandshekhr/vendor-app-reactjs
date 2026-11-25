@@ -927,7 +927,35 @@ export interface PrintJob {
   retry_count: number;
   last_error: string;
   printed_at: ISODateTime | null;
+  /** The print station it was sent to (self-service or auto-print), if any. */
+  station_name?: string | null;
+  released_at?: ISODateTime | null;
+  claimed_at?: ISODateTime | null;
 }
+
+/** A shop printer driven by the TNBS Print Agent on a Windows PC beside it. */
+export interface PrintStation {
+  id: number;
+  name: string;
+  code: string;
+  qr_url: string;
+  supports_color: boolean;
+  supports_duplex: boolean;
+  paper_sizes: string[];
+  is_active: boolean;
+  /** Print delivery and pickup orders here as soon as they're accepted. */
+  auto_print_orders: boolean;
+  is_paired: boolean;
+  online: boolean;
+  paired_at: ISODateTime | null;
+  last_seen_at: ISODateTime | null;
+  printer_name: string;
+  agent_version: string;
+  agent_status: string;
+  created_at: ISODateTime;
+}
+
+export type PrintStationInput = Pick<PrintStation, 'name' | 'supports_color' | 'supports_duplex' | 'paper_sizes' | 'is_active' | 'auto_print_orders'>;
 
 export interface PrintDeliveryBlock {
   state: PrintDeliveryState;

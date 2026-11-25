@@ -50,6 +50,12 @@ const authSlice = createSlice({
       state.business = { ...state.business, businessType: action.payload };
       saveBusinessSnapshot(state.business);
     },
+    /** The shop gained (or lost) its print shop profile, e.g. after adding the printing category. */
+    printShopChanged(state, action: PayloadAction<boolean>) {
+      if (!state.business || Boolean(state.business.isPrintShop) === action.payload) return;
+      state.business = { ...state.business, isPrintShop: action.payload };
+      saveBusinessSnapshot(state.business);
+    },
     /** Network unavailable but a cached business snapshot exists: allow offline use (POS). */
     offlineSessionResumed(state) {
       if (state.business) state.status = 'authenticated';
@@ -67,5 +73,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { signedIn, businessLoaded, businessTypeChanged, offlineSessionResumed, signedOut } = authSlice.actions;
+export const { signedIn, businessLoaded, businessTypeChanged, printShopChanged, offlineSessionResumed, signedOut } = authSlice.actions;
 export default authSlice.reducer;
