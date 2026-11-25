@@ -21,7 +21,7 @@ import {
   useRegisterBarcodeMutation,
   useUpdateProductMutation,
 } from './api';
-import { BARCODE_TYPES, emptyProduct, productSchema, toFormData, toProductPayload, type ProductFormValues } from './productSchema';
+import { BARCODE_TYPES, emptyProduct, MAX_IMAGE_BYTES, productSchema, toFormData, toProductPayload, type ProductFormValues } from './productSchema';
 
 function fromProduct(p: ProductDetail, barcode: string | null, barcodeType: string | null): ProductFormValues {
   return {
@@ -59,6 +59,7 @@ export function ProductFormPage() {
   const [remove, removeState] = useDeleteProductMutation();
   const [registerBarcode] = useRegisterBarcodeMutation();
   const [image, setImage] = useState<File | null>(null);
+  const [removeBackground, setRemoveBackground] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const form = useForm<ProductFormValues>({
@@ -82,7 +83,7 @@ export function ProductFormPage() {
 
   const onSubmit = handleSubmit(async (values) => {
     const payload = toProductPayload(values, !isEdit);
-    const body = image ? toFormData(payload, image) : payload;
+    const body = image ? toFormData(payload, image, { removeBackground }) : payload;
     try {
       const saved = isEdit ? await update({ id: productId, data: body }).unwrap() : await create(body).unwrap();
       const barcode = values.barcode?.trim() ?? '';
@@ -95,7 +96,12 @@ export function ProductFormPage() {
           return;
         }
       }
-      toast.success(isEdit ? 'Product updated' : 'Product created', `SKU ${saved.sku}`);
+      toast.success(
+        isEdit ? 'Product updated' : 'Product created',
+        image && removeBackground
+          ? `SKU ${saved.sku}. Removing the photo background: the new photo shows in about a minute.`
+          : `SKU ${saved.sku}`,
+      );
       navigate('/products');
     } catch (err) {
       if (isApiError(err)) {
@@ -258,21 +264,38 @@ export function ProductFormPage() {
                 ) : (
                   <ImagePlus className="h-8 w-8 text-ink-subtle" aria-hidden />
                 )}
-                <span className="text-sm text-ink-muted">{image ? image.name : 'Choose an image (JPG/PNG, max 5 MB)'}</span>
+                <span className="text-sm text-ink-muted">{image ? image.name : 'Choose an image (JPG/PNG/WebP, max 15 MB)'}</span>
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   className="sr-only"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f && f.size > 5 * 1024 * 1024) {
-                      toast.error('Image is larger than 5 MB');
+                    if (f && f.size > MAX_IMAGE_BYTES) {
+                      toast.error('Image is larger than 15 MB');
                       return;
                     }
                     setImage(f ?? null);
                   }}
                 />
               </label>
+              <label className={`mt-3 flex items-start gap-2 text-sm ${image ? '' : 'opacity-60'}`}>
+                <Checkbox
+                  checked={removeBackground}
+                  disabled={!image}
+                  onChange={(e) => setRemoveBackground(e.target.checked)}
+                  aria-describedby="remove-bg-help"
+                />
+                <span>
+                  Remove background
+                  <span id="remove-bg-help" className="block text-xs text-ink-muted">
+                    {image
+                      ? 'Puts the item on a plain white background. Works best with one item per photo.'
+                      : 'Choose a new photo to use this.'}
+                  </span>
+                </span>
+              </label>
+              <p className="mt-2 text-xs text-ink-subtle">Photos are saved as WebP under 250 KB.</p>
             </CardBody>
           </Card>
           <Card>
