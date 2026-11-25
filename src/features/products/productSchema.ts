@@ -99,12 +99,21 @@ export function toProductPayload(v: ProductFormValues, includeStock: boolean): R
   return payload;
 }
 
-export function toFormData(payload: Record<string, unknown>, image: File): FormData {
+/** Largest photo the form accepts; the server turns it into WebP under 250 KB. */
+export const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+
+export function toFormData(
+  payload: Record<string, unknown>,
+  image: File,
+  options: { removeBackground?: boolean } = {},
+): FormData {
   const fd = new FormData();
   for (const [k, value] of Object.entries(payload)) {
     if (value === null || value === undefined) continue;
     fd.append(k, typeof value === 'boolean' ? (value ? 'true' : 'false') : String(value));
   }
   fd.append('image', image);
+  // The API cuts the item out onto a white background in the background (≈1 min).
+  if (options.removeBackground) fd.append('remove_background', 'true');
   return fd;
 }
